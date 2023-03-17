@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/usr/src/app
+    networks:
+      - new
+    command: air ./cmd/main.go -b 0.0.0.0
+
+  postgres:
+    image: postgres:alpine
+    networks:
+      new:
+        aliases:
+          - database
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "root"
+      POSTGRES_DB: "task-management-db"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+  
+  # migrate:
+  #   image: migrate/migrate
+  #   networks:
+  #     - new
+  #   volumes:
+  #     - ./db/migrations:/db/migrations
+  #   command: ["-path", "/db/migrations", "-database",  "${DB_URL}", "up"]
+  #   links: 
+  #     - postgres
+  #   depends_on:
+  #     - postgres
+
+volumes:
+  postgres-db:
+
+networks:
+  new:
