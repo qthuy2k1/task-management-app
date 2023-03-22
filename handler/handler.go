@@ -89,7 +89,7 @@ func NewHandler(db db.Database) http.Handler {
 				Value: token,
 			})
 			r = r.WithContext(ctx)
-			http.Redirect(w, r, "/users/", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, "/profile", http.StatusTemporaryRedirect)
 
 		})
 		r.Post("/login", func(w http.ResponseWriter, r *http.Request) {

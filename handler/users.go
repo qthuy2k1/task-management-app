@@ -23,6 +23,7 @@ func users(router chi.Router) {
 		router.Get("/", getUser)
 		router.Put("/", updateUser)
 		router.Delete("/", deleteUser)
+		router.Post("/get-tasks", getAllTaskAssignedToUser)
 	})
 }
 
@@ -51,7 +52,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddUser(user); err != nil {
+	if err := dbInstance.AddUser(user, r); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -92,7 +93,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	userId := r.Context().Value(userIDKey).(int)
-	err := dbInstance.DeleteUser(userId)
+	err := dbInstance.DeleteUser(userId, r)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
