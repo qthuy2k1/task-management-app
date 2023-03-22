@@ -24,6 +24,8 @@ func tasks(router chi.Router) {
 		// router.Patch("/lock", lockTask)
 		router.Delete("/", deleteTask)
 		router.Put("/lock", lockTask)
+		router.Post("/add-user", createUserTaskDetail)
+		router.Post("/get-users", getAllUserAsignnedToTask)
 	})
 }
 func TaskContext(next http.Handler) http.Handler {
@@ -48,7 +50,7 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddTask(task); err != nil {
+	if err := dbInstance.AddTask(task, r); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -88,7 +90,7 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
 	taskId := r.Context().Value(taskIDKey).(int)
-	err := dbInstance.DeleteTask(taskId)
+	err := dbInstance.DeleteTask(taskId, r)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

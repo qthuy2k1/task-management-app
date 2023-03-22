@@ -46,7 +46,7 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddTaskCategory(taskCategory); err != nil {
+	if err := dbInstance.AddTaskCategory(taskCategory, r); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -68,8 +68,8 @@ func getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategpryID := r.Context().Value(taskCategoryIDKey).(int)
-	taskCategory, err := dbInstance.GetTaskCategoryByID(taskCategpryID)
+	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
+	taskCategory, err := dbInstance.GetTaskCategoryByID(taskCategoryID)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -86,7 +86,7 @@ func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 
 func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
-	err := dbInstance.DeleteTaskCategory(taskCategoryID)
+	err := dbInstance.DeleteTaskCategory(taskCategoryID, r)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -103,7 +103,7 @@ func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData)
+	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData, r)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

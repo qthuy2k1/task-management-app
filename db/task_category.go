@@ -2,7 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"net/http"
 
+	"github.com/go-chi/jwtauth"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
@@ -24,11 +26,17 @@ func (db Database) GetAllTaskCategories() (*models.TaskCategoryList, error) {
 	return list, nil
 }
 
-func (db Database) AddTaskCategory(taskCategory *models.TaskCategory) error {
+func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request) error {
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+	if !isManager {
+		return err
+	}
 	var id int
 	// insert into taskCategorys table
 	query := `INSERT INTO task_categories(name) VALUES($1) RETURNING id;`
-	err := db.Conn.QueryRow(query, taskCategory.Name).Scan(&id)
+	err = db.Conn.QueryRow(query, taskCategory.Name).Scan(&id)
 	if err != nil {
 		return err
 	}
@@ -48,9 +56,15 @@ func (db Database) GetTaskCategoryByID(taskCategoryID int) (models.TaskCategory,
 	}
 }
 
-func (db Database) DeleteTaskCategory(taskCategoryID int) error {
+func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request) error {
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+	if !isManager {
+		return err
+	}
 	query := `DELETE FROM task_categories WHERE id = $1`
-	_, err := db.Conn.Exec(query, taskCategoryID)
+	_, err = db.Conn.Exec(query, taskCategoryID)
 	switch err {
 	case sql.ErrNoRows:
 		return ErrNoMatch
@@ -59,10 +73,16 @@ func (db Database) DeleteTaskCategory(taskCategoryID int) error {
 	}
 }
 
-func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory) (models.TaskCategory, error) {
+func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request) (models.TaskCategory, error) {
 	taskCategory := models.TaskCategory{}
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+	if !isManager {
+		return taskCategory, err
+	}
 	query := `UPDATE task_categories SET name=$1 WHERE id=$2 RETURNING *;`
-	err := db.Conn.QueryRow(query, taskCategoryData.Name, taskCategoryData.ID).Scan(&taskCategory.ID, &taskCategory.Name)
+	err = db.Conn.QueryRow(query, taskCategoryData.Name, taskCategoryData.ID).Scan(&taskCategory.ID, &taskCategory.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return taskCategory, ErrNoMatch
