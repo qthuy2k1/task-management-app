@@ -12,26 +12,28 @@ import (
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
-var taskIDKey = "task_id"
+var taskIDKey = "taskID"
 
 func tasks(router chi.Router) {
 	router.Get("/", getAllTasks)
 	router.Post("/", createTask)
-	router.Route("/{taskId}", func(router chi.Router) {
+	router.Route("/{taskID}", func(router chi.Router) {
 		router.Use(TaskContext)
 		router.Get("/", getTask)
 		router.Put("/", updateTask)
+		// router.Patch("/lock", lockTask)
 		router.Delete("/", deleteTask)
+		router.Put("/lock", lockTask)
 	})
 }
 func TaskContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		taskId := chi.URLParam(r, "taskId")
-		if taskId == "" {
+		taskID := chi.URLParam(r, "taskID")
+		if taskID == "" {
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("task ID is required")))
 			return
 		}
-		id, err := strconv.Atoi(taskId)
+		id, err := strconv.Atoi(taskID)
 		if err != nil {
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task ID")))
 		}
@@ -69,7 +71,7 @@ func getAllTasks(w http.ResponseWriter, r *http.Request) {
 
 func getTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.Context().Value(taskIDKey).(int)
-	task, err := dbInstance.GetTaskById(taskID)
+	task, err := dbInstance.GetTaskByID(taskID)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -97,13 +99,13 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func updateTask(w http.ResponseWriter, r *http.Request) {
-	taskId := r.Context().Value(taskIDKey).(int)
+	taskID := r.Context().Value(taskIDKey).(int)
 	taskData := models.Task{}
 	if err := render.Bind(r, &taskData); err != nil {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	task, err := dbInstance.UpdateTask(taskId, taskData)
+	task, err := dbInstance.UpdateTask(taskID, taskData)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -114,6 +116,19 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := render.Render(w, r, &task); err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+}
+
+func lockTask(w http.ResponseWriter, r *http.Request) {
+	taskID := r.Context().Value(taskIDKey).(int)
+	err := dbInstance.LockTask(taskID, r)
+	if err != nil {
+		if err == db.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ServerErrorRenderer(err))
+		}
 		return
 	}
 }

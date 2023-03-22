@@ -13,7 +13,6 @@ type Task struct {
 	StartDate      time.Time `json:"start_date"`
 	EndDate        time.Time `json:"end_date"`
 	Status         string    `json:"status"`
-	UserID         int       `json:"user_id"`
 	AuthorID       int       `json:"author_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
