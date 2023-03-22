@@ -28,13 +28,21 @@ func (db Database) GetAllTasks() (*models.TaskList, error) {
 	}
 	return list, nil
 }
-func (db Database) AddTask(task *models.Task) error {
+func (db Database) AddTask(task *models.Task, r *http.Request) error {
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+
+	if !isManager {
+		return err
+	}
+
 	var id int
 	var createdAt time.Time
 
 	// insert into tasks table
 	query := `insert into tasks(name, description, start_date, end_date, status, author_id, task_category_id) values($1, $2, $3, $4, $5, $6, $7) returning id, created_at;`
-	err := db.Conn.QueryRow(query, task.Name, task.Description, task.StartDate, task.EndDate, task.Status, task.AuthorID, task.TaskCategoryID).Scan(&id, &createdAt)
+	err = db.Conn.QueryRow(query, task.Name, task.Description, task.StartDate, task.EndDate, task.Status, task.AuthorID, task.TaskCategoryID).Scan(&id, &createdAt)
 	if err != nil {
 		return err
 	}
@@ -54,9 +62,17 @@ func (db Database) GetTaskByID(taskID int) (models.Task, error) {
 		return task, err
 	}
 }
-func (db Database) DeleteTask(taskId int) error {
+func (db Database) DeleteTask(taskId int, r *http.Request) error {
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+
+	if !isManager {
+		return err
+	}
+
 	query := `DELETE FROM tasks WHERE id = $1;`
-	_, err := db.Conn.Exec(query, taskId)
+	_, err = db.Conn.Exec(query, taskId)
 	switch err {
 	case sql.ErrNoRows:
 		return ErrNoMatch

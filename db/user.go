@@ -2,7 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"net/http"
 
+	"github.com/go-chi/jwtauth"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
@@ -24,7 +26,14 @@ func (db Database) GetAllUsers() (*models.UserList, error) {
 	return list, nil
 }
 
-func (db Database) AddUser(user *models.User) error {
+func (db Database) AddUser(user *models.User, r *http.Request) error {
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+	if !isManager {
+		return err
+	}
+
 	var id int
 	password := user.Santize(user.Password)
 	hashedPassword, err := user.Hash(password)
@@ -55,9 +64,16 @@ func (db Database) GetUserByID(userID int) (models.User, error) {
 	}
 }
 
-func (db Database) DeleteUser(userID int) error {
+func (db Database) DeleteUser(userID int, r *http.Request) error {
+	userToken := jwtauth.TokenFromCookie(r)
+
+	isManager, err := db.IsManager(userToken)
+	if !isManager {
+		return err
+	}
+
 	query := `DELETE FROM users WHERE id = $1`
-	_, err := db.Conn.Exec(query, userID)
+	_, err = db.Conn.Exec(query, userID)
 	switch err {
 	case sql.ErrNoRows:
 		return ErrNoMatch
