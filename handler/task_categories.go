@@ -46,7 +46,7 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddTaskCategory(taskCategory, r); err != nil {
+	if err := dbInstance.AddTaskCategory(taskCategory, r, tokenAuth); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -57,7 +57,7 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
-	taskCategories, err := dbInstance.GetAllTaskCategories()
+	taskCategories, err := dbInstance.GetAllTaskCategories(r, tokenAuth)
 	if err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
@@ -69,7 +69,7 @@ func getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
 
 func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
-	taskCategory, err := dbInstance.GetTaskCategoryByID(taskCategoryID)
+	taskCategory, err := dbInstance.GetTaskCategoryByID(taskCategoryID, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -86,7 +86,7 @@ func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 
 func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
-	err := dbInstance.DeleteTaskCategory(taskCategoryID, r)
+	err := dbInstance.DeleteTaskCategory(taskCategoryID, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -100,10 +100,11 @@ func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
 	taskCategoryData := models.TaskCategory{}
 	if err := render.Bind(r, &taskCategoryData); err != nil {
+		fmt.Println("hi")
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData, r)
+	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

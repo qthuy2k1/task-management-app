@@ -2,13 +2,14 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 
-	"github.com/go-chi/jwtauth"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
-func (db Database) GetAllTaskCategories() (*models.TaskCategoryList, error) {
+func (db Database) GetAllTaskCategories(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.TaskCategoryList, error) {
 	list := &models.TaskCategoryList{}
 	rows, err := db.Conn.Query(`SELECT * FROM task_categories;`)
 	if err != nil {
@@ -26,17 +27,15 @@ func (db Database) GetAllTaskCategories() (*models.TaskCategoryList, error) {
 	return list, nil
 }
 
-func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request) error {
-	userToken := jwtauth.TokenFromCookie(r)
-
-	isManager, err := db.IsManager(userToken)
+func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
+	isManager := db.IsManager(r, tokenAuth)
 	if !isManager {
-		return err
+		return errors.New("you are not the manager")
 	}
 	var id int
 	// insert into taskCategorys table
 	query := `INSERT INTO task_categories(name) VALUES($1) RETURNING id;`
-	err = db.Conn.QueryRow(query, taskCategory.Name).Scan(&id)
+	err := db.Conn.QueryRow(query, taskCategory.Name).Scan(&id)
 	if err != nil {
 		return err
 	}
@@ -44,7 +43,7 @@ func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Re
 	return nil
 }
 
-func (db Database) GetTaskCategoryByID(taskCategoryID int) (models.TaskCategory, error) {
+func (db Database) GetTaskCategoryByID(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.TaskCategory, error) {
 	taskCategory := models.TaskCategory{}
 	query := `SELECT * FROM task_categories WHERE id = $1;`
 	row := db.Conn.QueryRow(query, taskCategoryID)
@@ -56,15 +55,13 @@ func (db Database) GetTaskCategoryByID(taskCategoryID int) (models.TaskCategory,
 	}
 }
 
-func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request) error {
-	userToken := jwtauth.TokenFromCookie(r)
-
-	isManager, err := db.IsManager(userToken)
+func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
+	isManager := db.IsManager(r, tokenAuth)
 	if !isManager {
-		return err
+		return errors.New("you are not the manager")
 	}
 	query := `DELETE FROM task_categories WHERE id = $1`
-	_, err = db.Conn.Exec(query, taskCategoryID)
+	_, err := db.Conn.Exec(query, taskCategoryID)
 	switch err {
 	case sql.ErrNoRows:
 		return ErrNoMatch
@@ -73,16 +70,14 @@ func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request) error
 	}
 }
 
-func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request) (models.TaskCategory, error) {
+func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.TaskCategory, error) {
 	taskCategory := models.TaskCategory{}
-	userToken := jwtauth.TokenFromCookie(r)
-
-	isManager, err := db.IsManager(userToken)
+	isManager := db.IsManager(r, tokenAuth)
 	if !isManager {
-		return taskCategory, err
+		return taskCategory, errors.New("you are not the manager")
 	}
 	query := `UPDATE task_categories SET name=$1 WHERE id=$2 RETURNING *;`
-	err = db.Conn.QueryRow(query, taskCategoryData.Name, taskCategoryData.ID).Scan(&taskCategory.ID, &taskCategory.Name)
+	err := db.Conn.QueryRow(query, taskCategoryData.Name, taskCategoryData.ID).Scan(&taskCategory.ID, &taskCategory.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return taskCategory, ErrNoMatch

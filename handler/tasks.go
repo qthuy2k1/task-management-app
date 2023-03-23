@@ -24,7 +24,9 @@ func tasks(router chi.Router) {
 		// router.Patch("/lock", lockTask)
 		router.Delete("/", deleteTask)
 		router.Put("/lock", lockTask)
+		router.Put("/unlock", unLockTask)
 		router.Post("/add-user", createUserTaskDetail)
+		router.Post("/delete-user", deleteUserFromTask)
 		router.Post("/get-users", getAllUserAsignnedToTask)
 	})
 }
@@ -50,7 +52,7 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddTask(task, r); err != nil {
+	if err := dbInstance.AddTask(task, r, tokenAuth); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -61,7 +63,7 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAllTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := dbInstance.GetAllTasks()
+	tasks, err := dbInstance.GetAllTasks(r, tokenAuth)
 	if err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
@@ -73,7 +75,7 @@ func getAllTasks(w http.ResponseWriter, r *http.Request) {
 
 func getTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.Context().Value(taskIDKey).(int)
-	task, err := dbInstance.GetTaskByID(taskID)
+	task, err := dbInstance.GetTaskByID(taskID, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -90,7 +92,7 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
 	taskId := r.Context().Value(taskIDKey).(int)
-	err := dbInstance.DeleteTask(taskId, r)
+	err := dbInstance.DeleteTask(taskId, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -107,10 +109,10 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	task, err := dbInstance.UpdateTask(taskID, taskData)
+	task, err := dbInstance.UpdateTask(taskID, taskData, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
-			render.Render(w, r, ErrNotFound)
+			render.Render(w, r, ErrorRenderer(fmt.Errorf("you are not the manager")))
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
@@ -124,7 +126,20 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 
 func lockTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.Context().Value(taskIDKey).(int)
-	err := dbInstance.LockTask(taskID, r)
+	err := dbInstance.LockTask(taskID, r, tokenAuth)
+	if err != nil {
+		if err == db.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ServerErrorRenderer(err))
+		}
+		return
+	}
+}
+
+func unLockTask(w http.ResponseWriter, r *http.Request) {
+	taskID := r.Context().Value(taskIDKey).(int)
+	err := dbInstance.UnLockTask(taskID, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

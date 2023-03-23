@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
 	"github.com/qthuy2k1/task-management-app/models"
@@ -17,7 +16,7 @@ var userIDKey = "user_id"
 
 func users(router chi.Router) {
 	router.Get("/", getAllUsers)
-	router.Post("/", createUser)
+	// router.Post("/", createUser)
 	router.Route("/{userID}", func(router chi.Router) {
 		router.Use(UserContext)
 		router.Get("/", getUser)
@@ -43,20 +42,14 @@ func UserContext(next http.Handler) http.Handler {
 	})
 }
 
-func createUser(w http.ResponseWriter, r *http.Request) {
+func createUser(w http.ResponseWriter, r *http.Request, userData models.User) {
 	// user := r.Context().Value("user").(*models.User)
 	// token, _, _ := jwtauth.FromContext(r.Context())
-	user := &models.User{}
-	user.Token = jwtauth.TokenFromCookie(r)
-	if err := render.Bind(r, user); err != nil {
-		render.Render(w, r, ErrBadRequest)
-		return
-	}
-	if err := dbInstance.AddUser(user, r); err != nil {
+	if err := dbInstance.AddUser(&userData); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
-	if err := render.Render(w, r, user); err != nil {
+	if err := render.Render(w, r, &userData); err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
 	}
@@ -64,7 +57,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := dbInstance.GetAllUsers()
+	users, err := dbInstance.GetAllUsers(r, tokenAuth)
 	if err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
@@ -93,7 +86,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	userId := r.Context().Value(userIDKey).(int)
-	err := dbInstance.DeleteUser(userId, r)
+	err := dbInstance.DeleteUser(userId, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
