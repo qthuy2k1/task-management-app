@@ -10,12 +10,22 @@ import (
 
 // Add 1 user to 1 task
 func (db Database) AddUserToTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager := db.IsManager(r, tokenAuth)
+	isManager, err := db.IsManager(r, tokenAuth)
+	if err != nil {
+		return err
+	}
 	if !isManager {
 		return errors.New("you are not the manager")
 	}
 	query := `INSERT INTO user_task_details(user_id, task_id) VALUES($1, $2);`
-	_, err := db.Conn.Exec(query, userID, taskID)
+	stmt, err := db.Conn.Prepare(query)
+	if err != nil {
+		return err
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.Exec(userID, taskID)
 	if err != nil {
 		return err
 	}
@@ -23,12 +33,22 @@ func (db Database) AddUserToTask(userID int, taskID int, r *http.Request, tokenA
 }
 
 func (db Database) DeleteUserFromTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager := db.IsManager(r, tokenAuth)
+	isManager, err := db.IsManager(r, tokenAuth)
+	if err != nil {
+		return err
+	}
 	if !isManager {
 		return errors.New("you are not the manager")
 	}
 	query := `DELETE FROM user_task_details WHERE user_id=$1 AND task_id=$2;`
-	_, err := db.Conn.Exec(query, userID, taskID)
+	stmt, err := db.Conn.Prepare(query)
+	if err != nil {
+		return err
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.Exec(userID, taskID)
 	if err != nil {
 		return err
 	}
@@ -38,7 +58,15 @@ func (db Database) DeleteUserFromTask(userID int, taskID int, r *http.Request, t
 // Get all the users that are assigned to the task
 func (db Database) GetAllUsersAssignedToTask(taskID int) (*models.UserList, error) {
 	list := &models.UserList{}
-	rows, err := db.Conn.Query(`SELECT id, name, email, role FROM user_task_details d INNER JOIN users u ON d.user_id = u.id WHERE task_id=$1;`, taskID)
+	query := `SELECT id, name, email, role FROM user_task_details d INNER JOIN users u ON d.user_id = u.id WHERE task_id=$1;`
+	stmt, err := db.Conn.Prepare(query)
+	if err != nil {
+		return list, err
+	}
+
+	defer stmt.Close()
+
+	rows, err := stmt.Query(taskID)
 	if err != nil {
 		return list, err
 	}
@@ -57,7 +85,15 @@ func (db Database) GetAllUsersAssignedToTask(taskID int) (*models.UserList, erro
 // Get all the tasks that are assigned to the user
 func (db Database) GetAllTaskAssignedToUser(userID int) (*models.TaskList, error) {
 	list := &models.TaskList{}
-	rows, err := db.Conn.Query(`SELECT name, description FROM user_task_details d INNER JOIN tasks t ON d.task_id = t.id WHERE user_id=$1;`, userID)
+	query := `SELECT name, description FROM user_task_details d INNER JOIN tasks t ON d.task_id = t.id WHERE user_id=$1;`
+	stmt, err := db.Conn.Prepare(query)
+	if err != nil {
+		return list, err
+	}
+
+	defer stmt.Close()
+
+	rows, err := stmt.Query(userID)
 	if err != nil {
 		return list, err
 	}
