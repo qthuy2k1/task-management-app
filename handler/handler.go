@@ -1,16 +1,13 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
-	"github.com/qthuy2k1/task-management-app/models"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/jwtauth/v5"
@@ -63,87 +60,9 @@ func NewHandler(db db.Database) http.Handler {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Welcome anonymous"))
 		})
-		r.Post("/signup", func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			r.ParseForm()
-			user := models.User{}
-			user.Name = r.PostForm.Get("name")
-			user.Email = r.PostForm.Get("email")
-			user.Password = r.PostForm.Get("password")
-			user.Role = "user"
-			context.WithValue(ctx, "user", user)
-
-			if user.Email == "" || user.Name == "" || user.Password == "" {
-				render.Render(w, r, ErrorRenderer(fmt.Errorf("missing name, email or password")))
-				return
-			}
-
-			token := MakeToken(user.Email, user.Password)
-			w.Write([]byte(token))
-
-			http.SetCookie(w, &http.Cookie{
-				HttpOnly: true,
-				Expires:  time.Now().Add(7 * 24 * time.Hour),
-				SameSite: http.SameSiteLaxMode,
-				// Uncomment below for HTTPS:
-				// Secure: true,
-				Name:  "jwt", // Must be named "jwt" or else the token cannot be searched for by jwtauth.Verifier.
-				Value: token,
-			})
-			r = r.WithContext(ctx)
-			createUser(w, r, user)
-
-			w.Write([]byte("Sign up successful"))
-			http.Redirect(w, r, "/profile", http.StatusTemporaryRedirect)
-
-		})
-		r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			r.ParseForm()
-			user := models.User{}
-			user.Email = r.PostForm.Get("email")
-			context.WithValue(ctx, "email", user.Email)
-			user.Password = r.PostForm.Get("password")
-
-			if user.Email == "" || user.Password == "" {
-				http.Error(w, "Missing email or password.", http.StatusBadRequest)
-				return
-			}
-
-			token := MakeToken(user.Email, user.Password)
-
-			ok := db.CompareEmailAndPassword(user.Email, user.Password, r, tokenAuth)
-			if !ok {
-				http.Error(w, "\nWrong email or password", http.StatusBadRequest)
-				return
-			}
-
-			http.SetCookie(w, &http.Cookie{
-				HttpOnly: true,
-				Expires:  time.Now().Add(7 * 24 * time.Hour),
-				SameSite: http.SameSiteLaxMode,
-				// Uncomment below for HTTPS:
-				// Secure: true,
-				Name:  "jwt", // Must be named "jwt" or else the token cannot be searched for by jwtauth.Verifier.
-				Value: token,
-			})
-			w.Write([]byte(fmt.Sprintf(`Login successful, your email is: %s and your token is: %s`, user.Email, token)))
-
-			// http.Redirect(w, r, "/users/", http.StatusSeeOther)
-		})
-		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
-			http.SetCookie(w, &http.Cookie{
-				HttpOnly: true,
-				MaxAge:   -1, // Delete the cookie.
-				SameSite: http.SameSiteLaxMode,
-				// Uncomment below for HTTPS:
-				// Secure: true,
-				Name:  "jwt",
-				Value: "",
-			})
-
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-		})
+		r.Post("/signup", signup)
+		r.Post("/login", login)
+		r.Post("/logout", logout)
 	})
 	return r
 }
