@@ -159,22 +159,23 @@ func (db Database) IsManager(r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool,
 	return count > 0, nil
 }
 
-func (db Database) CompareEmailAndPassword(email, password string, r *http.Request, tokenAuth *jwtauth.JWTAuth) bool {
+func (db Database) CompareEmailAndPassword(email, password string, r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool, error) {
 	// Get all users and assign them to list
 	list, err := db.GetAllUsers(r, tokenAuth)
 	if err != nil {
-		return false
+		return false, errors.New("cannot get list of users")
 	}
 	// Loop through the list of users and check if the email and password are correct
 	for _, x := range list.Users {
 		if x.Email == email {
 			if err = x.CheckPasswordHash(x.Password, password); err == nil {
-				fmt.Println(password)
-				return true
+				return true, nil
+			} else {
+				return false, errors.New("your password is wrong")
 			}
 		}
 	}
-	return false
+	return false, errors.New("your email is wrong")
 }
 
 func (db Database) ChangeUserPassword(oldPassword, newPassword string, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {

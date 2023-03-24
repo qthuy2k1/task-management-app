@@ -205,9 +205,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 	token := MakeToken(email, password)
 
 	// Check if the email and password are valid
-	ok := dbInstance.CompareEmailAndPassword(email, password, r, tokenAuth)
+	ok, err := dbInstance.CompareEmailAndPassword(email, password, r, tokenAuth)
 	if !ok {
-		http.Error(w, "\nWrong email or password", http.StatusBadRequest)
+		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
 
