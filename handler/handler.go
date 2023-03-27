@@ -1,12 +1,11 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/qthuy2k1/task-management-app/db"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -45,11 +44,6 @@ func NewHandler(db db.Database) http.Handler {
 		// send 401 Unauthorized response for any unverified
 		r.Use(jwtauth.Authenticator)
 
-		r.Get("/profile", func(w http.ResponseWriter, r *http.Request) {
-			_, claims, _ := jwtauth.FromContext(r.Context())
-			w.Write([]byte(fmt.Sprintf("protected area. hi %v", strings.Split(claims["email"].(string), "@")[0])))
-			println(claims["email"].(string))
-		})
 		r.Route("/users", users)
 		r.Route("/task-categories", taskCategories)
 		r.Route("/tasks", tasks)
@@ -57,9 +51,7 @@ func NewHandler(db db.Database) http.Handler {
 
 	// public routes
 	r.Group(func(r chi.Router) {
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Welcome anonymous"))
-		})
+		r.Get("/", welcome)
 		r.Post("/signup", signup)
 		r.Post("/login", login)
 		r.Post("/logout", logout)
@@ -83,4 +75,16 @@ func MakeToken(email, password string) string {
 		"password": password,
 	})
 	return tokenString
+}
+
+func GetToken(r *http.Request, tokenAuth *jwtauth.JWTAuth) jwt.Token {
+	token, err := tokenAuth.Decode(jwtauth.TokenFromCookie(r))
+	if err != nil {
+		return nil
+	}
+	return token
+}
+
+func welcome(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Welcome anonymous"))
 }

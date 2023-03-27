@@ -8,6 +8,7 @@ import (
 	"regexp"
 
 	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
@@ -81,8 +82,26 @@ func (db Database) GetUserByID(userID int) (models.User, error) {
 	}
 }
 
-func (db Database) DeleteUser(userID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) GetUserByEmail(userEmail string) (models.User, error) {
+	user := models.User{}
+	query := `SELECT * FROM users WHERE email = $1;`
+	stmt, err := db.Conn.Prepare(query)
+	if err != nil {
+		return user, err
+	}
+	defer stmt.Close()
+
+	row := stmt.QueryRow(userEmail)
+	switch err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role); err {
+	case sql.ErrNoRows:
+		return user, ErrNoMatch
+	default:
+		return user, err
+	}
+}
+
+func (db Database) DeleteUser(userID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -134,13 +153,8 @@ func (db Database) UpdateUser(userID int, userData models.User) (models.User, er
 	return user, nil
 }
 
-func (db Database) IsManager(r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool, error) {
-	user, err := tokenAuth.Decode(jwtauth.TokenFromCookie(r))
-	if err != nil {
-		return false, err
-	}
-
-	email, _ := user.Get("email")
+func (db Database) IsManager(r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (bool, error) {
+	email, _ := token.Get("email")
 
 	// Prepare a statement to retrieve the count of users with a given email and role
 	stmt, err := db.Conn.Prepare(`SELECT COUNT(*) FROM users WHERE email=$1 AND role='manager'`)

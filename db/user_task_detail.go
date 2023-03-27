@@ -5,12 +5,14 @@ import (
 	"net/http"
 
 	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
 // Add 1 user to 1 task
-func (db Database) AddUserToTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) AddUserToTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -32,8 +34,8 @@ func (db Database) AddUserToTask(userID int, taskID int, r *http.Request, tokenA
 	return nil
 }
 
-func (db Database) DeleteUserFromTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) DeleteUserFromTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
