@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
@@ -35,8 +36,8 @@ func (db Database) GetAllTaskCategories(r *http.Request, tokenAuth *jwtauth.JWTA
 	return list, nil
 }
 
-func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -80,8 +81,8 @@ func (db Database) GetTaskCategoryByID(taskCategoryID int, r *http.Request, toke
 	}
 }
 
-func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -105,9 +106,9 @@ func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, token
 	}
 }
 
-func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.TaskCategory, error) {
+func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.TaskCategory, error) {
 	taskCategory := models.TaskCategory{}
-	isManager, err := db.IsManager(r, tokenAuth)
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return taskCategory, err
 	}

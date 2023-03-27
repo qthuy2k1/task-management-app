@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
 	"github.com/qthuy2k1/task-management-app/models"
@@ -46,7 +46,12 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddTaskCategory(taskCategory, r, tokenAuth); err != nil {
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	if err := dbInstance.AddTaskCategory(taskCategory, r, tokenAuth, token); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -86,7 +91,12 @@ func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 
 func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
-	err := dbInstance.DeleteTaskCategory(taskCategoryID, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err := dbInstance.DeleteTaskCategory(taskCategoryID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -104,7 +114,12 @@ func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

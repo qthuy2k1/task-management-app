@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
 	"github.com/qthuy2k1/task-management-app/models"
@@ -52,7 +52,12 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	if err := dbInstance.AddTask(task, r, tokenAuth); err != nil {
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	if err := dbInstance.AddTask(task, r, tokenAuth, token); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -91,8 +96,13 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
-	taskId := r.Context().Value(taskIDKey).(int)
-	err := dbInstance.DeleteTask(taskId, r, tokenAuth)
+	taskID := r.Context().Value(taskIDKey).(int)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err := dbInstance.DeleteTask(taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -109,7 +119,12 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	task, err := dbInstance.UpdateTask(taskID, taskData, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	task, err := dbInstance.UpdateTask(taskID, taskData, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("you are not the manager")))
@@ -126,7 +141,12 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 
 func lockTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.Context().Value(taskIDKey).(int)
-	err := dbInstance.LockTask(taskID, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err := dbInstance.LockTask(taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -139,7 +159,12 @@ func lockTask(w http.ResponseWriter, r *http.Request) {
 
 func unLockTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.Context().Value(taskIDKey).(int)
-	err := dbInstance.UnLockTask(taskID, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err := dbInstance.UnLockTask(taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

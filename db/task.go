@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
@@ -36,8 +37,8 @@ func (db Database) GetAllTasks(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*mo
 	}
 	return list, nil
 }
-func (db Database) AddTask(task *models.Task, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) AddTask(task *models.Task, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -84,8 +85,8 @@ func (db Database) GetTaskByID(taskID int, r *http.Request, tokenAuth *jwtauth.J
 		return task, err
 	}
 }
-func (db Database) DeleteTask(taskId int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) DeleteTask(taskId int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -109,10 +110,10 @@ func (db Database) DeleteTask(taskId int, r *http.Request, tokenAuth *jwtauth.JW
 		return err
 	}
 }
-func (db Database) UpdateTask(taskID int, taskData models.Task, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.Task, error) {
+func (db Database) UpdateTask(taskID int, taskData models.Task, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.Task, error) {
 	task := models.Task{}
 
-	isManager, err := db.IsManager(r, tokenAuth)
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return task, err
 	}
@@ -141,8 +142,8 @@ func (db Database) UpdateTask(taskID int, taskData models.Task, r *http.Request,
 	return task, nil
 }
 
-func (db Database) LockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) LockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}
@@ -170,8 +171,8 @@ func (db Database) LockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTA
 	return nil
 }
 
-func (db Database) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
-	isManager, err := db.IsManager(r, tokenAuth)
+func (db Database) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
 		return err
 	}

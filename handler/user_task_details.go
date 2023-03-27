@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
 )
@@ -30,7 +30,11 @@ func UserTaskDetailContext(next http.Handler) http.Handler {
 }
 
 func createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+		return
+	}
 	userID, err := strconv.Atoi(r.PostForm.Get("id"))
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid user id")))
@@ -41,13 +45,23 @@ func createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task id")))
 		return
 	}
-	if err = dbInstance.AddUserToTask(userID, taskID, r, tokenAuth); err != nil {
+
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	if err = dbInstance.AddUserToTask(userID, taskID, r, tokenAuth, token); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
 }
 func deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+		return
+	}
 	userID, err := strconv.Atoi(r.PostForm.Get("id"))
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid user id")))
@@ -58,7 +72,12 @@ func deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task id")))
 		return
 	}
-	err = dbInstance.DeleteUserFromTask(userID, taskID, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err = dbInstance.DeleteUserFromTask(userID, taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)

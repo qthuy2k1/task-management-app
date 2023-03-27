@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
 	"github.com/qthuy2k1/task-management-app/models"
@@ -18,6 +18,7 @@ var userIDKey = "user_id"
 func users(router chi.Router) {
 	router.Get("/", getAllUsers)
 	router.Post("/change-password", changeUserPassword)
+	router.Get("/profile", profileUser)
 	router.Route("/{userID}", func(router chi.Router) {
 		router.Use(UserContext)
 		router.Get("/", getUser)
@@ -84,8 +85,13 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
-	userId := r.Context().Value(userIDKey).(int)
-	err := dbInstance.DeleteUser(userId, r, tokenAuth)
+	userID := r.Context().Value(userIDKey).(int)
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err := dbInstance.DeleteUser(userID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -118,10 +124,13 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func changeUserPassword(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+	}
 	oldPassword := r.PostForm.Get("oldPassword")
 	newPassword := r.PostForm.Get("newPassword")
-	err := dbInstance.ChangeUserPassword(oldPassword, newPassword, r, tokenAuth)
+	err = dbInstance.ChangeUserPassword(oldPassword, newPassword, r, tokenAuth)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
@@ -130,7 +139,10 @@ func changeUserPassword(w http.ResponseWriter, r *http.Request) {
 
 func signup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	r.ParseForm()
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+	}
 	user := models.User{}
 	user.Name = r.PostForm.Get("name")
 	user.Email = r.PostForm.Get("email")
@@ -240,4 +252,28 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func profileUser(w http.ResponseWriter, r *http.Request) {
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	userEmail, _ := token.Get("email")
+
+	user, err := dbInstance.GetUserByEmail(userEmail.(string))
+	if err != nil {
+		if err == db.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ErrorRenderer(err))
+		}
+		return
+	}
+	if err := render.Render(w, r, &user); err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+
 }
