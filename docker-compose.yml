@@ -12,6 +12,8 @@ services:
     networks:
       - new
     command: air ./cmd/main.go -b 0.0.0.0
+    depends_on:
+      - postgres
 
   postgres:
     image: postgres:alpine
@@ -27,18 +29,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres-db:/var/lib/postgresql/data
-  
-  # migrate:
-  #   image: migrate/migrate
-  #   networks:
-  #     - new
-  #   volumes:
-  #     - ./db/migrations:/db/migrations
-  #   command: ["-path", "/db/migrations", "-database",  "${DB_URL}", "up"]
-  #   links: 
-  #     - postgres
-  #   depends_on:
-  #     - postgres
 
 volumes:
   postgres-db:
