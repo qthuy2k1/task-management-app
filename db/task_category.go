@@ -115,6 +115,13 @@ func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData model
 	if !isManager {
 		return taskCategory, errors.New("you are not the manager")
 	}
+	taskCategory, err = db.GetTaskCategoryByID(taskCategoryID, r, tokenAuth)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return taskCategory, ErrNoMatch
+		}
+		return taskCategory, err
+	}
 	query := `UPDATE task_categories SET name=$1 WHERE id=$2 RETURNING *;`
 	stmt, err := db.Conn.Prepare(query)
 	if err != nil {
@@ -123,7 +130,7 @@ func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData model
 
 	defer stmt.Close()
 
-	err = stmt.QueryRow(taskCategoryData.Name, taskCategoryData.ID).Scan(&taskCategory.ID, &taskCategory.Name)
+	err = stmt.QueryRow(taskCategoryData.Name, taskCategory.ID).Scan(&taskCategory.ID, &taskCategory.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return taskCategory, ErrNoMatch

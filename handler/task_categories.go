@@ -110,7 +110,6 @@ func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
 	taskCategoryData := models.TaskCategory{}
 	if err := render.Bind(r, &taskCategoryData); err != nil {
-		fmt.Println("hi")
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
