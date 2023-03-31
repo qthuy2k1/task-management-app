@@ -2,9 +2,12 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,28 +23,47 @@ func users(router chi.Router) {
 	router.Post("/change-password", changeUserPassword)
 	router.Get("/profile", profileUser)
 	router.Route("/{userID}", func(router chi.Router) {
-		router.Use(UserContext)
+		// router.Use(UserContext)
 		router.Get("/", getUser)
 		router.Put("/", updateUser)
+		router.Patch("/update-role", updateRole)
 		router.Delete("/", deleteUser)
 		router.Post("/get-tasks", getAllTaskAssignedToUser)
 	})
 }
 
-func UserContext(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := chi.URLParam(r, "userID")
-		if userID == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("user ID is required")))
-			return
-		}
-		id, err := strconv.Atoi(userID)
-		if err != nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid user ID")))
-		}
-		ctx := context.WithValue(r.Context(), userIDKey, id)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// func UserContext(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+// 	})
+// }
+
+func validateUserIDFromURLParam(r *http.Request) (int, error) {
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		return 0, errors.New("user ID is required")
+	}
+	userID = strings.TrimLeft(userID, "0")
+	userID = strings.Trim(userID, " ")
+	id, err := strconv.Atoi(userID)
+	if err != nil {
+		return 0, errors.New("cannot convert user ID from string to int, invalid user ID")
+	}
+	// Define a regular expression pattern to match the user ID format
+	pattern := "^[0-9]+$"
+
+	// Compile the regular expression pattern
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the user ID matches the regular expression pattern
+	if !regex.MatchString(userID) {
+		return 0, errors.New("invalid user ID")
+	}
+	return id, nil
+
 }
 
 func createUser(w http.ResponseWriter, r *http.Request, userData models.User) {
@@ -68,7 +90,12 @@ func getAllUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(int)
+	userID, err := validateUserIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+
 	user, err := dbInstance.GetUserByID(userID)
 	if err != nil {
 		if err == db.ErrNoMatch {
@@ -85,13 +112,17 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(int)
+	userID, err := validateUserIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrBadRequest)
+		return
+	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err := dbInstance.DeleteUser(userID, r, tokenAuth, token)
+	err = dbInstance.DeleteUser(userID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -102,13 +133,48 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func updateUser(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(int)
+	userID, err := validateUserIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrBadRequest)
+		return
+	}
 	userData := models.User{}
 	if err := render.Bind(r, &userData); err != nil {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
 	user, err := dbInstance.UpdateUser(userID, userData)
+	if err != nil {
+		if err == db.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ServerErrorRenderer(err))
+		}
+		return
+	}
+	if err := render.Render(w, r, &user); err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+}
+
+func updateRole(w http.ResponseWriter, r *http.Request) {
+	role := r.URL.Query().Get("role")
+	if role == "" {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid role")))
+		return
+	}
+
+	if role != "manager" && role != "user" {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("the role must be either 'manager' or 'user'")))
+		return
+	}
+	userID, ok := r.Context().Value(userIDKey).(int)
+	if !ok {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("cannot get the user id")))
+		return
+	}
+	user, err := dbInstance.UpdateRole(userID, role)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -168,7 +234,6 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := MakeToken(user.Email, user.Password)
-	w.Write([]byte(token))
 
 	http.SetCookie(w, &http.Cookie{
 		HttpOnly: true,
@@ -181,6 +246,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	})
 	r = r.WithContext(ctx)
 	createUser(w, r, user)
+	fmt.Println("123")
 
 	w.Write([]byte("Sign up successful"))
 	http.Redirect(w, r, "/profile", http.StatusTemporaryRedirect)
@@ -234,7 +300,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		Value: token,
 	})
 	// Write the response with a success message
-	w.Write([]byte(fmt.Sprintf(`Login successful, your email is: %s and your token is: %s`, email, token)))
+	w.Write([]byte(fmt.Sprintf(`Login successful, your email is: %s`, email)))
 
 	// Redirect the user to the main page
 	// http.Redirect(w, r, "/users/", http.StatusSeeOther)

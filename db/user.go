@@ -66,7 +66,7 @@ func (db Database) AddUser(user *models.User) error {
 
 func (db Database) GetUserByID(userID int) (models.User, error) {
 	user := models.User{}
-	query := `SELECT * FROM users WHERE id = $1;`
+	query := "SELECT * FROM users WHERE id = $1;"
 	stmt, err := db.Conn.Prepare(query)
 	if err != nil {
 		return user, err
@@ -128,14 +128,7 @@ func (db Database) DeleteUser(userID int, r *http.Request, tokenAuth *jwtauth.JW
 func (db Database) UpdateUser(userID int, userData models.User) (models.User, error) {
 	user := models.User{}
 
-	// Sanitize and hash the password
-	password := user.Santize(user.Password)
-	hashedPassword, err := user.Hash(password)
-	if err != nil {
-		return user, err
-	}
-
-	query := `UPDATE users SET name=$1, email=$2, password=$3, role=$4 WHERE id=$5 RETURNING *;`
+	query := `UPDATE users SET name=$1, email=$2 WHERE id=$3 RETURNING id, name, email, role;`
 	stmt, err := db.Conn.Prepare(query)
 	if err != nil {
 		return user, err
@@ -143,7 +136,31 @@ func (db Database) UpdateUser(userID int, userData models.User) (models.User, er
 
 	defer stmt.Close()
 
-	err = stmt.QueryRow(userData.Name, userData.Email, hashedPassword, userData.Role, userID).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role)
+	err = stmt.QueryRow(userData.Name, userData.Email, userID).Scan(&user.ID, &user.Name, &user.Email, &user.Role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return user, ErrNoMatch
+		}
+		return user, err
+	}
+	return user, nil
+}
+
+func (db Database) UpdateRole(userID int, role string) (models.User, error) {
+	user, err := db.GetUserByID(userID)
+	if err != nil {
+		return user, err
+	}
+
+	query := `UPDATE users SET role=$1 WHERE id=$2 RETURNING id, name, email, role;`
+	stmt, err := db.Conn.Prepare(query)
+	if err != nil {
+		return user, err
+	}
+
+	defer stmt.Close()
+
+	err = stmt.QueryRow(role, user.ID).Scan(&user.ID, &user.Name, &user.Email, &user.Role)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return user, ErrNoMatch
