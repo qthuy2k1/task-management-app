@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
 	"github.com/qthuy2k1/task-management-app/models"
 	"github.com/stretchr/testify/assert"
@@ -307,42 +310,24 @@ func TestUpdateUser(t *testing.T) {
 
 func TestUpdateRoleUser(t *testing.T) {
 	invalidRoleErr := fmt.Errorf("invalid role")
-	// Create a mock user service
+	// Set up the mock user service
 	mockUserService := &db.MockUserService{}
 
-	// Create a new router
-	r := chi.NewRouter()
-
-	// Add a route for updating a user
-	r.Patch("/users/{userID}/update-role", func(w http.ResponseWriter, r *http.Request) {
-		role := r.URL.Query().Get("role")
-		if role == "" {
-			http.Error(w, "invalid role", http.StatusBadRequest)
-			return
-		}
-		// Parse the user ID from the URL path
-		userID, err := strconv.Atoi(chi.URLParam(r, "userID"))
-		if err != nil {
-			http.Error(w, "cannot get the user id", http.StatusBadRequest)
-			return
-		}
-
-		// Call the UpdateUser function on the mock user service
-		updatedUser, err := mockUserService.UpdateRole(userID, role)
-		if err != nil {
-			if err == db.ErrNoMatch {
-				http.Error(w, err.Error(), ErrNotFound.StatusCode)
-			} else if errors.Is(err, invalidRoleErr) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		// Return the updated user as JSON in the response body
-		json.NewEncoder(w).Encode(updatedUser)
-	})
+	// Set up the expectations for each test case
+	mockUserService.On("UpdateRole", 1, "manager").Return(models.User{
+		ID:    1,
+		Name:  "Alice",
+		Email: "alice@example.com",
+		Role:  "manager",
+	}, nil)
+	mockUserService.On("UpdateRole", 2, "user").Return(models.User{
+		ID:    2,
+		Name:  "John Doe",
+		Email: "john@example.com",
+		Role:  "user",
+	}, nil)
+	mockUserService.On("UpdateRole", 3, "adad").Return(models.User{}, db.ErrNoMatch)
+	mockUserService.On("UpdateRole", 4, "").Return(models.User{}, invalidRoleErr)
 
 	// Set up the test cases
 	testCases := []struct {
@@ -387,10 +372,36 @@ func TestUpdateRoleUser(t *testing.T) {
 		},
 	}
 
-	// Set up the mock user service to return the expected values for each test case
-	for _, tc := range testCases {
-		mockUserService.On("UpdateRole", tc.userID, tc.role).Return(tc.expectedUser, tc.expectedError)
-	}
+	r := chi.NewRouter()
+	// Add a route for updating a user
+	r.Patch("/users/{userID}/update-role", func(w http.ResponseWriter, r *http.Request) {
+		role := r.URL.Query().Get("role")
+		// Parse the user ID from the URL path
+		userID, err := strconv.Atoi(chi.URLParam(r, "userID"))
+		if err != nil {
+			http.Error(w, "cannot get the user id", http.StatusBadRequest)
+			return
+		}
+
+		// Call the UpdateUser function on the mock user service
+		updatedUser, err := mockUserService.UpdateRole(userID, role)
+		if role == "" {
+			err = invalidRoleErr
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			if err == db.ErrNoMatch {
+				http.Error(w, err.Error(), ErrNotFound.StatusCode)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Return the updated user as JSON in the response body
+		json.NewEncoder(w).Encode(updatedUser)
+	})
 
 	// Test each test case
 	for _, tc := range testCases {
@@ -420,9 +431,329 @@ func TestUpdateRoleUser(t *testing.T) {
 		} else {
 			assert.Equal(t, http.StatusInternalServerError, w.Code)
 		}
-		fmt.Println(tc.userID)
 	}
 
 	// Assert that all expectations were met
 	mockUserService.AssertExpectations(t)
+
+}
+
+func TestSignUpHandler(t *testing.T) {
+	testCases := []struct {
+		name         string
+		formData     url.Values
+		expectedCode int
+		expectedUser *models.User
+	}{
+		{
+			name: "valid signup",
+			formData: url.Values{
+				"name":     {"John Doe"},
+				"email":    {"johndoe@example.com"},
+				"password": {"password123"},
+			},
+			expectedCode: http.StatusOK,
+			expectedUser: &models.User{
+				Name:     "John Doe",
+				Email:    "johndoe@example.com",
+				Password: "password123",
+				Role:     "user",
+			},
+		},
+		{
+			name: "missing name",
+			formData: url.Values{
+				"email":    {"johndoe@example.com"},
+				"password": {"password123"},
+			},
+			expectedCode: http.StatusBadRequest,
+			expectedUser: nil,
+		},
+		// add more test cases here
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a new mock user service
+			mockUserService := &db.MockUserService{}
+
+			// Set up the mock user service to return nil error for AddUser
+			mockUserService.On("AddUser", tc.expectedUser).Return(nil)
+
+			// Create a new router with the SignUp handler
+			router := chi.NewRouter()
+			router.Post("/signup", func(w http.ResponseWriter, r *http.Request) {
+				// Call the SignUp handler with the mock user service
+				err := r.ParseForm()
+				if err != nil {
+					render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+					return
+				}
+
+				user := models.User{}
+				user.Name = r.PostForm.Get("name")
+				user.Email = r.PostForm.Get("email")
+				user.Password = r.PostForm.Get("password")
+				user.Role = "user"
+
+				if user.Email == "" || user.Name == "" || user.Password == "" {
+					render.Render(w, r, ErrorRenderer(fmt.Errorf("missing name, email or password")))
+					return
+				}
+
+				// Validate email
+				if !db.IsValidEmail(user.Email) {
+					render.Render(w, r, ErrorRenderer(fmt.Errorf("your email is not valid, please provide a valid email")))
+					return
+				}
+
+				// Validate password
+				// The password must contain at least 6 characters
+				if !db.IsValidPassword(user.Password) {
+					render.Render(w, r, ErrorRenderer(fmt.Errorf("your password is not valid, please provide a password that contains at least 6 characters")))
+					return
+				}
+
+				// Add user to database
+				err = mockUserService.AddUser(&user)
+				if err != nil {
+					render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to add user to database")))
+					return
+				}
+
+				// Generate JWT token for user
+				token := MakeToken(user.Email, user.Password)
+
+				// Set JWT token as cookie
+				http.SetCookie(w, &http.Cookie{
+					HttpOnly: true,
+					Expires:  time.Now().Add(7 * 24 * time.Hour),
+					SameSite: http.SameSiteLaxMode,
+					// Uncomment below for HTTPS:
+					// Secure: true,
+					Name:  "jwt", // Must be named "jwt" or else the token cannot be searched for by jwtauth.Verifier.
+					Value: token,
+				})
+
+			})
+
+			// Create a new signup request with mock form data
+			signupRequest, err := http.NewRequest("POST", "/signup", strings.NewReader(tc.formData.Encode()))
+			if err != nil {
+				t.Fatalf("Failed to create signup request: %v", err)
+			}
+			signupRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+			// Call the signup request using the router and check for successful signup response
+			signupResponse := httptest.NewRecorder()
+			router.ServeHTTP(signupResponse, signupRequest)
+
+			if signupResponse.Code != tc.expectedCode {
+				t.Errorf("Expected status code %d, but got %d", tc.expectedCode, signupResponse.Code)
+			}
+
+			// Verify that the AddUser method was called on the mock user service with the correct user object
+			if tc.expectedUser != nil {
+				mockUserService.AssertCalled(t, "AddUser", tc.expectedUser)
+			}
+		})
+	}
+}
+
+func TestLoginHandler(t *testing.T) {
+	// Create a new mock user service instance for each test case
+	mockUserService := &db.MockUserService{}
+	// Create a new router with the login handler
+	router := chi.NewRouter()
+	router.Post("/login",
+		func(w http.ResponseWriter, r *http.Request) {
+			err := r.ParseForm()
+			if err != nil {
+				http.Error(w, "Failed to parse form data.", http.StatusInternalServerError)
+				return
+			}
+
+			email := r.PostForm.Get("email")
+			password := r.PostForm.Get("password")
+
+			// Validate email
+			validEmail := mockUserService.IsValidEmail(email)
+			if !validEmail {
+				render.Render(w, r, ErrorRenderer(fmt.Errorf("your email is not valid, please provide a valid email")))
+				return
+			}
+
+			// Validate password
+			// The password must contain at least 6 characters
+			validPassword := mockUserService.IsValidPassword(password)
+			if !validPassword {
+				render.Render(w, r, ErrorRenderer(fmt.Errorf("your password is not valid, please provide a valid password that contains at least 6 characters")))
+				return
+			}
+
+			// Test CompareEmailAndPassword only if email and password are valid
+			if validEmail && validPassword {
+				// Generate a JWT token using the email and password
+				token := MakeToken(email, password)
+
+				// Check if the email and password are valid
+				// ok, err := mockUserService.CompareEmailAndPassword(email, password, r, tokenAuth)
+				// if err != nil {
+				// 	render.Render(w, r, ErrorRenderer(err))
+				// 	return
+				// }
+				// if !ok {
+				// 	http.Error(w, "Incorrect email or password.", http.StatusUnauthorized)
+				// 	return
+				// }
+
+				// Set the JWT token as a cookie in the response
+				http.SetCookie(w, &http.Cookie{
+					HttpOnly: true,
+					Expires:  time.Now().Add(7 * 24 * time.Hour),
+					SameSite: http.SameSiteLaxMode,
+					// Uncomment below for HTTPS:
+					// Secure: true,
+					Name:  "jwt", // Must be named "jwt" or else the token cannot be searched for by jwtauth.Verifier.
+					Value: token,
+				})
+
+				// Write the response with a success message
+				w.Write([]byte(fmt.Sprintf(`Login successful, your email is: %s`, email)))
+
+				// Redirect the user to the main page
+				// http.Redirect(w, r, "/users/", http.StatusSeeOther)
+			}
+		})
+	// Define a slice of test cases
+	testCases := []struct {
+		name               string
+		email              string
+		password           string
+		expectedStatusCode int
+		expectedBody       string
+		isValidEmail       bool
+		isValidPassword    bool
+	}{
+		{
+			name:               "Login with valid email and password",
+			email:              "test@example.com",
+			password:           "password",
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       `Login successful, your email is: test@example.com`,
+			isValidEmail:       true,
+			isValidPassword:    true,
+		},
+		{
+			name:               "Login with missing email",
+			email:              "",
+			password:           "password",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       `your email is not valid, please provide a valid email`,
+			isValidEmail:       false,
+			isValidPassword:    true,
+		},
+		{
+			name:               "Login with missing password",
+			email:              "test@example.com",
+			password:           "",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       `your password is not valid, please provide a valid password that contains at least 6 characters`,
+			isValidEmail:       true,
+			isValidPassword:    false,
+		},
+		{
+			name:               "Login with invalid email",
+			email:              "invalid-email",
+			password:           "password",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       `your email is not valid, please provide a valid email`,
+			isValidEmail:       false,
+			isValidPassword:    true,
+		},
+		{
+			name:               "Login with weak password",
+			email:              "test@example.com",
+			password:           "weak",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedBody:       `your password is not valid, please provide a valid password that contains at least 6 characters`,
+			isValidEmail:       true,
+			isValidPassword:    false,
+		},
+		// {
+		// 	name:               "Login with incorrect email or password",
+		// 	email:              "test@example.com",
+		// 	password:           "incorrect-password",
+		// 	expectedStatusCode: http.StatusUnauthorized,
+		// 	expectedBody:       `Incorrect email or password`,
+		// 	isValidEmail:       true,
+		// 	isValidPassword:    false,
+		// },
+	}
+	// Loop through the test cases
+	for _, tc := range testCases {
+		// Set up the mock user service to return true for IsValidEmail
+		mockUserService.On("IsValidEmail", tc.email).Return(tc.isValidEmail)
+		// Set up the mock user service to return true for IsValidPassword
+		mockUserService.On("IsValidPassword", tc.password).Return(tc.isValidPassword)
+		// Set up the mock user service to return true and nil error for CompareEmailAndPassword
+		// mockUserService.On("CompareEmailAndPassword", tc.email, tc.password, mock.Anything, mock.Anything).Return(tc.expectedStatusCode == http.StatusOK, nil)
+		// Create a new test request with the email and password form data
+		reqBody := fmt.Sprintf("email=%s&password=%s", tc.email, tc.password)
+		req, err := http.NewRequest("POST", "/login", strings.NewReader(reqBody))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		// Create a new test response recorder
+		recorder := httptest.NewRecorder()
+
+		// Call the router with the test request and response recorder
+		router.ServeHTTP(recorder, req)
+
+		// Check if the response status code is as expected
+		if recorder.Code != tc.expectedStatusCode {
+			t.Errorf("%s: Expected response status code %d, but got %d", tc.name, tc.expectedStatusCode, recorder.Code)
+			continue
+		}
+
+		// Check if the response body contains the expected message
+		if !strings.Contains(recorder.Body.String(), tc.expectedBody) {
+			t.Errorf("%s: Expected response body to contain %q, but got %q", tc.name, tc.expectedBody, recorder.Body.String())
+			continue
+		}
+
+		// Assert that the mock user service was called as expected
+		mockUserService.AssertExpectations(t)
+	}
+}
+
+func TestLogoutHandler(t *testing.T) {
+	// Create a new router with the logout handler
+	router := chi.NewRouter()
+	router.Get("/logout", logout)
+
+	// Create a new test request to the logout route
+	req, err := http.NewRequest("GET", "/logout", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a new test response recorder
+	recorder := httptest.NewRecorder()
+
+	// Call the router with the test request and response recorder
+	router.ServeHTTP(recorder, req)
+
+	// Check if the response status code is as expected
+	if recorder.Code != http.StatusOK {
+		t.Errorf("Expected response status code %d, but got %d", http.StatusOK, recorder.Code)
+	}
+
+	// Check if the cookie was deleted
+	cookie := recorder.Header().Get("Set-Cookie")
+	if cookie != "jwt=; Max-Age=0; HttpOnly; SameSite=Lax" {
+		t.Errorf("Expected cookie to be deleted, but got %s", cookie)
+	}
 }

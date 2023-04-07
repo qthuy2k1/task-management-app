@@ -261,6 +261,9 @@ func (db Database) ChangeUserPassword(oldPassword, newPassword string, r *http.R
 }
 
 func IsValidEmail(email string) bool {
+	if email == "" {
+		return false
+	}
 	// Define a regular expression for validating email addresses
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
@@ -269,6 +272,9 @@ func IsValidEmail(email string) bool {
 }
 
 func IsValidPassword(password string) bool {
+	if password == "" {
+		return false
+	}
 	// Check if the password is at least 6 characters long
 	return len(password) >= 6
 }

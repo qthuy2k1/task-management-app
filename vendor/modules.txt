@@ -31,6 +31,8 @@ github.com/goccy/go-json/internal/runtime
 # github.com/joho/godotenv v1.5.1
 ## explicit; go 1.12
 github.com/joho/godotenv
+# github.com/lestrrat-go/backoff/v2 v2.0.8
+## explicit; go 1.16
 # github.com/lestrrat-go/blackmagic v1.0.1
 ## explicit; go 1.16
 github.com/lestrrat-go/blackmagic
@@ -44,6 +46,8 @@ github.com/lestrrat-go/httprc
 ## explicit; go 1.13
 github.com/lestrrat-go/iter/arrayiter
 github.com/lestrrat-go/iter/mapiter
+# github.com/lestrrat-go/jwx v1.2.25
+## explicit; go 1.15
 # github.com/lestrrat-go/jwx/v2 v2.0.6
 ## explicit; go 1.16
 github.com/lestrrat-go/jwx/v2
@@ -75,6 +79,8 @@ github.com/lestrrat-go/option
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
+# github.com/pkg/errors v0.9.1
+## explicit
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
@@ -83,9 +89,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/stretchr/objx
 # github.com/stretchr/testify v1.8.2
 ## explicit; go 1.13
-github.com/stretchr/testify
 github.com/stretchr/testify/assert
-github.com/stretchr/testify/http
 github.com/stretchr/testify/mock
 # golang.org/x/crypto v0.7.0
 ## explicit; go 1.17

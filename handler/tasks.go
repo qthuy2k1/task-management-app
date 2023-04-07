@@ -1,10 +1,12 @@
 package handler
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -17,8 +19,8 @@ var taskIDKey = "taskID"
 func tasks(router chi.Router) {
 	router.Get("/", getAllTasks)
 	router.Post("/", createTask)
+	router.Post("/csv", importTaskCSV)
 	router.Route("/{taskID}", func(router chi.Router) {
-		router.Use(TaskContext)
 		router.Get("/", getTask)
 		router.Put("/", updateTask)
 		// router.Patch("/lock", lockTask)
@@ -27,23 +29,36 @@ func tasks(router chi.Router) {
 		router.Put("/unlock", unLockTask)
 		router.Post("/add-user", createUserTaskDetail)
 		router.Post("/delete-user", deleteUserFromTask)
-		router.Post("/get-users", getAllUserAsignnedToTask)
+		router.Get("/get-users", getAllUserAsignnedToTask)
 	})
 }
-func TaskContext(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		taskID := chi.URLParam(r, "taskID")
-		if taskID == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("task ID is required")))
-			return
-		}
-		id, err := strconv.Atoi(taskID)
-		if err != nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task ID")))
-		}
-		ctx := context.WithValue(r.Context(), taskIDKey, id)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+
+func validateTaskIDFromURLParam(r *http.Request) (int, error) {
+	taskID := chi.URLParam(r, "taskID")
+	if taskID == "" {
+		return 0, errors.New("task ID is required")
+	}
+	taskID = strings.TrimLeft(taskID, "0")
+	taskID = strings.Trim(taskID, " ")
+	id, err := strconv.Atoi(taskID)
+	if err != nil {
+		return 0, errors.New("cannot convert task ID from string to int, invalid task ID")
+	}
+	// Define a regular expression pattern to match the user ID format
+	pattern := "^[0-9]+$"
+
+	// Compile the regular expression pattern
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the user ID matches the regular expression pattern
+	if !regex.MatchString(taskID) {
+		return 0, errors.New("invalid task ID")
+	}
+	return id, nil
+
 }
 
 func createTask(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +94,11 @@ func getAllTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTask(w http.ResponseWriter, r *http.Request) {
-	taskID := r.Context().Value(taskIDKey).(int)
+	taskID, err := validateTaskIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
 	task, err := dbInstance.GetTaskByID(taskID, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
@@ -96,13 +115,17 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
-	taskID := r.Context().Value(taskIDKey).(int)
+	taskID, err := validateTaskIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err := dbInstance.DeleteTask(taskID, r, tokenAuth, token)
+	err = dbInstance.DeleteTask(taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -113,7 +136,11 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func updateTask(w http.ResponseWriter, r *http.Request) {
-	taskID := r.Context().Value(taskIDKey).(int)
+	taskID, err := validateTaskIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
 	taskData := models.Task{}
 	if err := render.Bind(r, &taskData); err != nil {
 		render.Render(w, r, ErrBadRequest)
@@ -140,13 +167,17 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func lockTask(w http.ResponseWriter, r *http.Request) {
-	taskID := r.Context().Value(taskIDKey).(int)
+	taskID, err := validateTaskIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err := dbInstance.LockTask(taskID, r, tokenAuth, token)
+	err = dbInstance.LockTask(taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -158,19 +189,51 @@ func lockTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func unLockTask(w http.ResponseWriter, r *http.Request) {
-	taskID := r.Context().Value(taskIDKey).(int)
+	taskID, err := validateTaskIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err := dbInstance.UnLockTask(taskID, r, tokenAuth, token)
+	err = dbInstance.UnLockTask(taskID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
+		return
+	}
+}
+
+func importTaskCSV(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+	}
+	path := r.PostForm.Get("path")
+	taskList, err := dbInstance.GetTaskFromCSV(path)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+	token := GetToken(r, tokenAuth)
+	for _, task := range taskList.Tasks {
+		if err := dbInstance.AddTask(&task, r, tokenAuth, token); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+		if err = dbInstance.AddUserToTask(task.AuthorID, task.ID, r, tokenAuth, token); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+	}
+	if err := render.Render(w, r, &taskList); err != nil {
+		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
 }

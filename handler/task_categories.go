@@ -1,10 +1,12 @@
 package handler
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -17,27 +19,39 @@ var taskCategoryIDKey = "taskCategoryID"
 func taskCategories(router chi.Router) {
 	router.Get("/", getAllTaskCategories)
 	router.Post("/", createTaskCategory)
+	router.Post("/csv", importTaskCategoryCSV)
 	router.Route("/{taskCategoryID}", func(router chi.Router) {
-		router.Use(TaskCategoryContext)
 		router.Get("/", getTaskCategory)
 		router.Put("/", updateTaskCategory)
 		router.Delete("/", deleteTaskCategory)
 	})
 }
-func TaskCategoryContext(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		taskCategoryID := chi.URLParam(r, "taskCategoryID")
-		if taskCategoryID == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("task category ID is required")))
-			return
-		}
-		id, err := strconv.Atoi(taskCategoryID)
-		if err != nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task category ID")))
-		}
-		ctx := context.WithValue(r.Context(), taskCategoryIDKey, id)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func validateTaskCategoryIDFromURLParam(r *http.Request) (int, error) {
+	taskCategoryID := chi.URLParam(r, "taskCategoryID")
+	if taskCategoryID == "" {
+		return 0, errors.New("task category ID is required")
+	}
+	taskCategoryID = strings.TrimLeft(taskCategoryID, "0")
+	taskCategoryID = strings.Trim(taskCategoryID, " ")
+	id, err := strconv.Atoi(taskCategoryID)
+	if err != nil {
+		return 0, errors.New("cannot convert task category ID from string to int, invalid task category ID")
+	}
+	// Define a regular expression pattern to match the user ID format
+	pattern := "^[0-9]+$"
+
+	// Compile the regular expression pattern
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the user ID matches the regular expression pattern
+	if !regex.MatchString(taskCategoryID) {
+		return 0, errors.New("invalid task category ID")
+	}
+	return id, nil
+
 }
 
 func createTaskCategory(w http.ResponseWriter, r *http.Request) {
@@ -46,11 +60,16 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
+	if taskCategory.Name == "" {
+		render.Render(w, r, ErrBadRequest)
+		return
+	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
+
 	if err := dbInstance.AddTaskCategory(taskCategory, r, tokenAuth, token); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
@@ -73,7 +92,10 @@ func getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
+	taskCategoryID, err := validateTaskCategoryIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
 	taskCategory, err := dbInstance.GetTaskCategoryByID(taskCategoryID, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
@@ -90,13 +112,16 @@ func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
+	taskCategoryID, err := validateTaskCategoryIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err := dbInstance.DeleteTaskCategory(taskCategoryID, r, tokenAuth, token)
+	err = dbInstance.DeleteTaskCategory(taskCategoryID, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -107,7 +132,10 @@ func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategoryID := r.Context().Value(taskCategoryIDKey).(int)
+	taskCategoryID, err := validateTaskCategoryIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
 	taskCategoryData := models.TaskCategory{}
 	if err := render.Bind(r, &taskCategoryData); err != nil {
 		render.Render(w, r, ErrBadRequest)
@@ -129,6 +157,30 @@ func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := render.Render(w, r, &taskCategory); err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+}
+
+func importTaskCategoryCSV(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+	}
+	path := r.PostForm.Get("path")
+	taskCategoryList, err := dbInstance.GetTaskCategoryFromCSV(path)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	token := GetToken(r, tokenAuth)
+
+	for _, taskCategory := range taskCategoryList.TaskCategories {
+		if err := dbInstance.AddTaskCategory(&taskCategory, r, tokenAuth, token); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+	}
+	if err := render.Render(w, r, &taskCategoryList); err != nil {
+		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
 }
