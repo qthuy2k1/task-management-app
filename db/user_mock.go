@@ -20,7 +20,7 @@ func (m *MockUserService) GetAllUsers(r *http.Request, tokenAuth *jwtauth.JWTAut
 
 func (m *MockUserService) AddUser(user *models.User) error {
 	args := m.Called(user)
-	return args.Error(1)
+	return args.Error(0)
 }
 func (m *MockUserService) GetUserByID(userID int) (models.User, error) {
 	args := m.Called(userID)
@@ -48,4 +48,18 @@ func (m *MockUserService) UpdateUser(userID int, userData models.User) (models.U
 func (m *MockUserService) UpdateRole(userID int, role string) (models.User, error) {
 	args := m.Called(userID, role)
 	return args.Get(0).(models.User), args.Error(1)
+}
+func (m *MockUserService) IsValidEmail(email string) bool {
+	args := m.Called(email)
+	return args.Bool(0)
+}
+
+func (m *MockUserService) IsValidPassword(password string) bool {
+	args := m.Called(password)
+	return args.Bool(0)
+}
+
+func (m *MockUserService) CompareEmailAndPassword(email, password string, r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool, error) {
+	args := m.Called(email, password, r, tokenAuth)
+	return args.Bool(0), args.Error(1)
 }
