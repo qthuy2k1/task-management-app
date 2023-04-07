@@ -23,7 +23,6 @@ func users(router chi.Router) {
 	router.Post("/change-password", changeUserPassword)
 	router.Get("/profile", profileUser)
 	router.Route("/{userID}", func(router chi.Router) {
-		// router.Use(UserContext)
 		router.Get("/", getUser)
 		router.Put("/", updateUser)
 		router.Patch("/update-role", updateRole)
@@ -31,12 +30,6 @@ func users(router chi.Router) {
 		router.Post("/get-tasks", getAllTaskAssignedToUser)
 	})
 }
-
-// func UserContext(next http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-// 	})
-// }
 
 func validateUserIDFromURLParam(r *http.Request) (int, error) {
 	userID := chi.URLParam(r, "userID")
@@ -216,8 +209,8 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	user.Role = "user"
 	context.WithValue(ctx, "user", user)
 
-	if user.Email == "" || user.Name == "" || user.Password == "" {
-		render.Render(w, r, ErrorRenderer(fmt.Errorf("missing name, email or password")))
+	if user.Name == "" {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("missing name")))
 		return
 	}
 
@@ -262,11 +255,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	email := r.PostForm.Get("email")
 	password := r.PostForm.Get("password")
-
-	if email == "" || password == "" {
-		http.Error(w, "Missing email or password.", http.StatusBadRequest)
-		return
-	}
 
 	// Validate email
 	if !db.IsValidEmail(email) {
@@ -316,8 +304,6 @@ func logout(w http.ResponseWriter, r *http.Request) {
 		Name:  "jwt",
 		Value: "",
 	})
-
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func profileUser(w http.ResponseWriter, r *http.Request) {
