@@ -2,14 +2,31 @@ package db
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"time"
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/lib/pq"
 	"github.com/qthuy2k1/task-management-app/models"
+)
+
+// define an enum for Status of task
+type TaskStatus string
+
+const (
+	NotStarted TaskStatus = "Not Started"
+	InProgress TaskStatus = "In Progress"
+	Complete   TaskStatus = "Complete"
+	Lock       TaskStatus = "Lock"
 )
 
 func (db Database) GetAllTasks(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.TaskList, error) {
@@ -58,7 +75,11 @@ func (db Database) AddTask(task *models.Task, r *http.Request, tokenAuth *jwtaut
 
 	defer stmt.Close()
 
-	err = stmt.QueryRow(task.Name, task.Description, task.StartDate, task.EndDate, task.Status, task.AuthorID, task.TaskCategoryID).Scan(&id, &createdAt)
+	quotedName := pq.QuoteLiteral(task.Name)
+	quotedDescription := pq.QuoteLiteral(task.Description)
+	quotedStatus := pq.QuoteLiteral(task.Status)
+
+	err = stmt.QueryRow(quotedName, quotedDescription, task.StartDate, task.EndDate, quotedStatus, task.AuthorID, task.TaskCategoryID).Scan(&id, &createdAt)
 	if err != nil {
 		return err
 	}
@@ -160,7 +181,7 @@ func (db Database) LockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTA
 
 	defer stmt.Close()
 
-	err = stmt.QueryRow("Lock", taskID).Scan(&task.ID, &task.Name, &task.Description, &task.StartDate, &task.EndDate, &task.Status, &task.AuthorID, &task.CreatedAt, &task.UpdatedAt, &task.TaskCategoryID)
+	err = stmt.QueryRow(Lock, taskID).Scan(&task.ID, &task.Name, &task.Description, &task.StartDate, &task.EndDate, &task.Status, &task.AuthorID, &task.CreatedAt, &task.UpdatedAt, &task.TaskCategoryID)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -188,7 +209,7 @@ func (db Database) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JW
 
 	defer stmt.Close()
 
-	err = stmt.QueryRow("Working", taskID).Scan(&task.ID, &task.Name, &task.Description, &task.StartDate, &task.EndDate, &task.Status, &task.AuthorID, &task.CreatedAt, &task.UpdatedAt, &task.TaskCategoryID)
+	err = stmt.QueryRow(InProgress, taskID).Scan(&task.ID, &task.Name, &task.Description, &task.StartDate, &task.EndDate, &task.Status, &task.AuthorID, &task.CreatedAt, &task.UpdatedAt, &task.TaskCategoryID)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -197,4 +218,103 @@ func (db Database) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JW
 		return err
 	}
 	return nil
+}
+
+func (db Database) GetTaskFromCSV(path string) (models.TaskList, error) {
+	// Create a slice to store the task data
+	taskList := models.TaskList{}
+
+	// Open the CSV file
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return taskList, err
+	}
+	defer file.Close()
+
+	// Create a new CSV reader
+	reader := csv.NewReader(file)
+	// Trim leading spaces around fields
+	reader.TrimLeadingSpace = true
+
+	// Read all the records from the CSV file
+	records, err := reader.ReadAll()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return taskList, err
+	}
+
+	// Layout for time.Time field in struct
+	const layoutDate = "2006-01-02T15:04:05Z"
+
+	// Loop through the records and create a new Task struct for each record
+	for i, record := range records {
+		// Skip the first index, which is the header name
+		if i == 0 {
+			continue
+		}
+		data := strings.Split(record[0], ",")
+		// remove unexpected characters
+		re := regexp.MustCompile("[^a-zA-Z0-9 ]+")
+
+		// regex for Name
+		name := re.ReplaceAllString(data[0], "")
+
+		// regex for description
+		description := re.ReplaceAllString(data[1], "")
+
+		// convert start date from string to time.Time
+		startDate, err := time.Parse(layoutDate, data[2])
+		if err != nil {
+			return taskList, err
+		}
+
+		// convert end date from string to time.Time
+		endDate, err := time.Parse(layoutDate, data[3])
+		if err != nil {
+			return taskList, err
+		}
+
+		// regex for task status
+		status := re.ReplaceAllString(data[4], "")
+
+		// convert authorID from string to int
+		authorID, err := strconv.Atoi(data[5])
+		if err != nil {
+			return taskList, err
+		}
+
+		// convert createdAt from string to time.Time
+		createdAt, err := time.Parse(layoutDate, data[6])
+		if err != nil {
+			return taskList, err
+		}
+
+		// convert updatedAt from string to time.Time
+		updatedAt, err := time.Parse(layoutDate, data[7])
+		if err != nil {
+			return taskList, err
+		}
+
+		// convert taskCategoryID from string to int
+		taskCategoryID, err := strconv.Atoi(data[8])
+		if err != nil {
+			return taskList, err
+		}
+
+		task := models.Task{
+			Name:           name,
+			Description:    description,
+			StartDate:      startDate,
+			EndDate:        endDate,
+			Status:         status,
+			AuthorID:       authorID,
+			CreatedAt:      createdAt,
+			UpdatedAt:      updatedAt,
+			TaskCategoryID: taskCategoryID,
+		}
+		taskList.Tasks = append(taskList.Tasks, task)
+	}
+
+	return taskList, nil
 }
