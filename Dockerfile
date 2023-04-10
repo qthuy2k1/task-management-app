@@ -7,7 +7,8 @@ FROM golang:1.20.1-alpine
 WORKDIR /usr/src/app
 
 RUN go install github.com/cosmtrek/air@latest
-
+RUN go get -u -t github.com/volatiletech/sqlboiler/v4@latest
+RUN go get -u -t github.com/volatiletech/sqlboiler/v4/drivers/sqlboiler-psql@latest
 COPY . .
 
 EXPOSE 3000

@@ -1,0 +1,13 @@
+output   = "models"
+wipe     = true
+no-tests = true
+add-enum-types = true
+
+[psql]
+  dbname = "task-management-db"
+  host   = "host.docker.internal"
+  port   = 5432
+  user   = "postgres"
+  pass   = "root"
+  blacklist = ["migrations", "other"]
+  sslmode = "disable"
