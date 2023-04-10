@@ -12,6 +12,7 @@ import (
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
+// Retrieves all users from the database
 func (db Database) GetAllUsers(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.UserList, error) {
 	list := &models.UserList{}
 
@@ -37,6 +38,7 @@ func (db Database) GetAllUsers(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*mo
 	return list, nil
 }
 
+// Adds a new user to the database
 func (db Database) AddUser(user *models.User) error {
 	// Sanitize and hash password
 	password := user.Santize(user.Password)
@@ -64,6 +66,7 @@ func (db Database) AddUser(user *models.User) error {
 	return nil
 }
 
+// Retrieves a user by their ID from the database
 func (db Database) GetUserByID(userID int) (models.User, error) {
 	user := models.User{}
 	query := "SELECT * FROM users WHERE id = $1;"
@@ -82,6 +85,7 @@ func (db Database) GetUserByID(userID int) (models.User, error) {
 	}
 }
 
+// Retrieves a user by their email from the database
 func (db Database) GetUserByEmail(userEmail string) (models.User, error) {
 	user := models.User{}
 	query := `SELECT * FROM users WHERE email = $1;`
@@ -100,6 +104,7 @@ func (db Database) GetUserByEmail(userEmail string) (models.User, error) {
 	}
 }
 
+// Deletes a user from the database, but only if the user is a manager
 func (db Database) DeleteUser(userID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
@@ -125,6 +130,7 @@ func (db Database) DeleteUser(userID int, r *http.Request, tokenAuth *jwtauth.JW
 	}
 }
 
+// Updates a user's name and email in the database, given their ID
 func (db Database) UpdateUser(userID int, userData models.User) (models.User, error) {
 	user := models.User{}
 
@@ -146,6 +152,7 @@ func (db Database) UpdateUser(userID int, userData models.User) (models.User, er
 	return user, nil
 }
 
+// Updates a user's role in the database, given their ID
 func (db Database) UpdateRole(userID int, role string) (models.User, error) {
 	user, err := db.GetUserByID(userID)
 	if err != nil {
@@ -170,6 +177,7 @@ func (db Database) UpdateRole(userID int, role string) (models.User, error) {
 	return user, nil
 }
 
+// Checks if a user is a manager
 func (db Database) IsManager(r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (bool, error) {
 	email, _ := token.Get("email")
 
@@ -190,6 +198,7 @@ func (db Database) IsManager(r *http.Request, tokenAuth *jwtauth.JWTAuth, token 
 	return count > 0, nil
 }
 
+// Compares the email and password entered by the user with the emails and passwords stored in the database
 func (db Database) CompareEmailAndPassword(email, password string, r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool, error) {
 	// Get all users and assign them to list
 	list, err := db.GetAllUsers(r, tokenAuth)
@@ -209,6 +218,7 @@ func (db Database) CompareEmailAndPassword(email, password string, r *http.Reque
 	return false, errors.New("your email is wrong")
 }
 
+// Changes a user's password in the database
 func (db Database) ChangeUserPassword(oldPassword, newPassword string, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
 	// Get the token and decode it to get the email of the current user is logging in
 	token, err := tokenAuth.Decode(jwtauth.TokenFromCookie(r))
@@ -260,6 +270,7 @@ func (db Database) ChangeUserPassword(oldPassword, newPassword string, r *http.R
 	return nil
 }
 
+// Validates that an email address is in a valid format
 func IsValidEmail(email string) bool {
 	if email == "" {
 		return false
@@ -271,6 +282,7 @@ func IsValidEmail(email string) bool {
 	return emailRegex.MatchString(email)
 }
 
+// Validates that a password meets the minimum requirements
 func IsValidPassword(password string) bool {
 	if password == "" {
 		return false

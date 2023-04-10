@@ -34,6 +34,7 @@ func (db Database) AddUserToTask(userID int, taskID int, r *http.Request, tokenA
 	return nil
 }
 
+// Deletes a user from a task in the database
 func (db Database) DeleteUserFromTask(userID int, taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {

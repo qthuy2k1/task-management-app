@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -585,4 +586,302 @@ func TestLockTaskHandler(t *testing.T) {
 		// Check the mock function was called
 		mockTaskService.AssertCalled(t, "LockTask", tc.taskID)
 	}
+}
+
+// func TestUnLockTaskHandler(t *testing.T) {
+// 	// Create a new instance of the mock task service
+// 	mockTaskService := &db.MockTaskService{}
+
+// 	// Create a new router
+// 	r := chi.NewRouter()
+
+// 	// Set up the route for the unLockTask handler
+// 	r.Put("/tasks/{taskID}/unlock", func(w http.ResponseWriter, r *http.Request) {
+// 		taskID, err := strconv.Atoi(chi.URLParam(r, "taskID"))
+// 		if err != nil {
+// 			http.Error(w, "invalid task ID", http.StatusBadRequest)
+// 			return
+// 		}
+// 		tokenStr := r.Context().Value("token").(string)
+// 		if tokenStr == "" {
+// 			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+// 			return
+// 		}
+// 		token, err := tokenAuth.Decode(tokenStr)
+// 		if err != nil {
+// 			fmt.Println(err)
+// 			render.Render(w, r, ErrorRenderer(err))
+// 			return
+// 		}
+// 		err = mockTaskService.UnLockTask(taskID, r, tokenAuth, token)
+// 		if err != nil {
+// 			if err == db.ErrNoMatch {
+// 				render.Render(w, r, ErrNotFound)
+// 			} else {
+// 				render.Render(w, r, ServerErrorRenderer(err))
+// 			}
+// 			return
+// 		}
+// 	})
+
+// 	// Define the test case
+// 	testCase := struct {
+// 		name           string
+// 		taskID         int
+// 		isManager      bool
+// 		expectedStatus int
+// 		expectedError  error
+// 	}{
+// 		name:           "Success - Task unlocked",
+// 		taskID:         1,
+// 		isManager:      true,
+// 		expectedStatus: http.StatusOK,
+// 		expectedError:  nil,
+// 	}
+
+// 	// Create a new request with a test JWT token
+// 	_, tokenStr, _ := tokenAuth.Encode(map[string]interface{}{
+// 		"email":    "test@example.com",
+// 		"password": "password",
+// 		"role":     "manager",
+// 	})
+
+// 	// Create a new request
+// 	req := httptest.NewRequest("PUT", fmt.Sprintf("/tasks/%d/unlock", testCase.taskID), nil)
+// 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+// 	// Add the token string to the request context
+// 	ctx := context.WithValue(req.Context(), "token", tokenStr)
+
+// 	// Create a new request with the updated context
+// 	req = req.WithContext(ctx)
+
+// 	// Set up the mock behavior
+// 	mockTaskService.On("UnLockTask", testCase.taskID).Return(testCase.expectedError)
+
+// 	// Call the handler function
+// 	recorder := httptest.NewRecorder()
+// 	r.ServeHTTP(recorder, req)
+
+// 	// Check the response status code
+// 	if recorder.Result().StatusCode != testCase.expectedStatus {
+// 		t.Errorf("%s: expected status code %d, but got %d", testCase.name, testCase.expectedStatus, recorder.Result().StatusCode)
+// 	}
+
+// // Check the mock function was called
+// mockTaskService.AssertCalled(t, "UnLockTask", testCase.taskID)
+func TestUnLockTaskHandler(t *testing.T) {
+	// Create a new instance of the mock task service
+	mockTaskService := &db.MockTaskService{}
+
+	// Create a new router
+	r := chi.NewRouter()
+
+	// Set up the route for the unLockTask handler
+	r.Put("/tasks/{taskID}/unlock", func(w http.ResponseWriter, r *http.Request) {
+		taskID, err := strconv.Atoi(chi.URLParam(r, "taskID"))
+		if err != nil {
+			http.Error(w, "invalid task ID", http.StatusBadRequest)
+			return
+		}
+		tokenStr := r.Context().Value("token").(string)
+		if tokenStr == "" {
+			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			return
+		}
+		token, err := tokenAuth.Decode(tokenStr)
+		if err != nil {
+			fmt.Println(err)
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+		err = mockTaskService.UnLockTask(taskID, r, tokenAuth, token)
+		if err != nil {
+			if err == db.ErrNoMatch {
+				render.Render(w, r, ErrNotFound)
+			} else {
+				render.Render(w, r, ServerErrorRenderer(err))
+			}
+			return
+		}
+	})
+
+	// Define the test cases
+	testCases := []struct {
+		name           string
+		taskID         int
+		tokenStr       string
+		expectedStatus int
+		expectedError  error
+	}{
+		{
+			name:           "Success - Task unlocked",
+			taskID:         1,
+			expectedStatus: http.StatusOK,
+			expectedError:  nil,
+		},
+		{
+			name:           "Error - Invalid task ID",
+			taskID:         0,
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  fmt.Errorf("invalid task ID"),
+		},
+
+		{
+			name:           "Error - Task not found",
+			taskID:         2,
+			expectedStatus: http.StatusNotFound,
+			expectedError:  db.ErrNoMatch,
+		},
+	}
+	// Create a new request with a test JWT token
+	_, tokenStr, _ := tokenAuth.Encode(map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "password",
+	})
+
+	// Loop through the test cases
+	for _, tc := range testCases {
+		// Create a new request with the test token
+		req := httptest.NewRequest("PUT", fmt.Sprintf("/tasks/%d/unlock", tc.taskID), nil)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tc.tokenStr))
+
+		// Add the token string to the request context
+		ctx := context.WithValue(req.Context(), "token", tokenStr)
+
+		// Create a new request with the updated context
+		req = req.WithContext(ctx)
+
+		// Set up the mock behavior
+		mockTaskService.On("UnLockTask", tc.taskID).Return(tc.expectedError)
+
+		// Call the handler function
+		recorder := httptest.NewRecorder()
+		r.ServeHTTP(recorder, req)
+
+		// Check the response status code
+		if recorder.Result().StatusCode != tc.expectedStatus {
+			t.Errorf("%s: expected status code %d, but got %d", tc.name, tc.expectedStatus, recorder.Result().StatusCode)
+		}
+
+		// Check the mock function was called
+		mockTaskService.AssertCalled(t, "UnLockTask", tc.taskID)
+	}
+}
+
+func TestImportTaskCSV(t *testing.T) {
+	// Create a new router
+	r := chi.NewRouter()
+
+	// Create a new mock task service
+	mockTaskService := db.MockTaskService{}
+	mockUserTaskDetailService := db.MockUserTaskDetailService{}
+
+	// Set up the route handler with the mock task service
+	r.Post("/tasks/csv", func(w http.ResponseWriter, r *http.Request) {
+		// Parse the form data
+		err := r.ParseForm()
+		if err != nil {
+			render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+			return
+		}
+
+		// Get the path parameter from the form data
+		path := r.PostForm.Get("path")
+
+		// Import the task data from the CSV file
+		taskList, err := mockTaskService.ImportTaskDataFromCSV(path)
+		if err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+
+		// Get the authentication token
+		token := GetToken(r, tokenAuth)
+
+		// Add each task to the database and assign it to the author
+		for _, task := range taskList.Tasks {
+			if err := mockTaskService.AddTask(&task, r, tokenAuth, token); err != nil {
+				render.Render(w, r, ErrorRenderer(err))
+				return
+			}
+			if err = mockUserTaskDetailService.AddUserToTask(task.AuthorID, task.ID, r, tokenAuth, token); err != nil {
+				render.Render(w, r, ErrorRenderer(err))
+				return
+			}
+		}
+
+		// Render the task list as the response
+		if err := render.Render(w, r, &taskList); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+	})
+
+	// Create a new test request with a path parameter
+	reqBody := fmt.Sprintf("path=%s", "./data/task.csv")
+	req := httptest.NewRequest("POST", "/tasks/csv", strings.NewReader(reqBody))
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Create a new test response recorder
+	rr := httptest.NewRecorder()
+
+	// Set up the expected task list returned by the mock task service
+	expectedTaskList := models.TaskList{
+		Tasks: []models.Task{
+			{
+				ID:             1,
+				Name:           "Task 1",
+				Description:    "Description for Task 1",
+				StartDate:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+				EndDate:        time.Date(2022, 1, 31, 0, 0, 0, 0, time.UTC),
+				Status:         "In Progress",
+				AuthorID:       1,
+				CreatedAt:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+				TaskCategoryID: 1,
+			},
+			{
+				ID:             2,
+				Name:           "Task 2",
+				Description:    "Description for Task 2",
+				StartDate:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
+				EndDate:        time.Date(2022, 2, 28, 0, 0, 0, 0, time.UTC),
+				Status:         "Completed",
+				AuthorID:       2,
+				CreatedAt:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
+				TaskCategoryID: 2,
+			},
+		},
+	}
+
+	// Set up the expected calls to the mock task service
+	mockTaskService.On("ImportTaskDataFromCSV", "./data/task.csv").Return(expectedTaskList, nil)
+
+	mockTaskService.On("AddTask", &expectedTaskList.Tasks[0]).Return(nil)
+	mockTaskService.On("AddTask", &expectedTaskList.Tasks[1]).Return(nil)
+
+	mockTaskService.On("AddUserToTask", 1, 1).Return(nil)
+	mockTaskService.On("AddUserToTask", 2, 2).Return(nil)
+	// Perform the test request
+	r.ServeHTTP(rr, req)
+
+	// Check the response status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code %d; got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check the response body
+	var responseTaskList models.TaskList
+	err := json.NewDecoder(rr.Body).Decode(&responseTaskList)
+	if err != nil {
+		t.Errorf("Error decoding response body: %s", err)
+	}
+	if !reflect.DeepEqual(responseTaskList, expectedTaskList) {
+		t.Errorf("Response body does not match expected task list: expected %+v, got %+v", expectedTaskList, responseTaskList)
+	}
+
+	// Check the calls to the mock task service
+	mockTaskService.AssertExpectations(t)
 }

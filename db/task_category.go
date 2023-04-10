@@ -14,6 +14,7 @@ import (
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
+// Gets all task categories from the database
 func (db Database) GetAllTaskCategories(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.TaskCategoryList, error) {
 	list := &models.TaskCategoryList{}
 	query := "SELECT * FROM task_categories"
@@ -40,6 +41,7 @@ func (db Database) GetAllTaskCategories(r *http.Request, tokenAuth *jwtauth.JWTA
 	return list, nil
 }
 
+// Adds a new task category to the database
 func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	if taskCategory.Name == "" {
 		return errors.New("bad request")
@@ -71,6 +73,7 @@ func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Re
 	return nil
 }
 
+// Gets a task category from the database by ID
 func (db Database) GetTaskCategoryByID(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.TaskCategory, error) {
 	taskCategory := models.TaskCategory{}
 	query := `SELECT * FROM task_categories WHERE id = $1;`
@@ -90,6 +93,7 @@ func (db Database) GetTaskCategoryByID(taskCategoryID int, r *http.Request, toke
 	}
 }
 
+// Deletes a task category from the database by ID
 func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
@@ -115,6 +119,7 @@ func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, token
 	}
 }
 
+// Updates a task category in the database by ID
 func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.TaskCategory, error) {
 	taskCategory := models.TaskCategory{}
 	isManager, err := db.IsManager(r, tokenAuth, token)
@@ -148,7 +153,9 @@ func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData model
 	}
 	return taskCategory, nil
 }
-func (db Database) GetTaskCategoryFromCSV(path string) (models.TaskCategoryList, error) {
+
+// Import task categories data from a CSV file
+func (db Database) ImportTaskCategoryDataFromCSV(path string) (models.TaskCategoryList, error) {
 	// Create a slice to store the taskCategory data
 	taskCategoryList := models.TaskCategoryList{}
 

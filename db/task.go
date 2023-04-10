@@ -29,6 +29,7 @@ const (
 	Lock       TaskStatus = "Lock"
 )
 
+// Retrieves all tasks from the database
 func (db Database) GetAllTasks(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.TaskList, error) {
 	list := &models.TaskList{}
 	query := `SELECT * FROM tasks;`
@@ -54,6 +55,8 @@ func (db Database) GetAllTasks(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*mo
 	}
 	return list, nil
 }
+
+// Adds a new task to the database
 func (db Database) AddTask(task *models.Task, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
@@ -88,6 +91,8 @@ func (db Database) AddTask(task *models.Task, r *http.Request, tokenAuth *jwtaut
 	task.CreatedAt = createdAt
 	return nil
 }
+
+// Retrieves a task from the database by ID
 func (db Database) GetTaskByID(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.Task, error) {
 	task := models.Task{}
 	query := `SELECT * FROM tasks WHERE id = $1;`
@@ -106,6 +111,8 @@ func (db Database) GetTaskByID(taskID int, r *http.Request, tokenAuth *jwtauth.J
 		return task, err
 	}
 }
+
+// Deletes a task from the database by ID
 func (db Database) DeleteTask(taskId int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
@@ -131,6 +138,8 @@ func (db Database) DeleteTask(taskId int, r *http.Request, tokenAuth *jwtauth.JW
 		return err
 	}
 }
+
+// Updates a task in the database by ID
 func (db Database) UpdateTask(taskID int, taskData models.Task, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.Task, error) {
 	task := models.Task{}
 
@@ -163,6 +172,7 @@ func (db Database) UpdateTask(taskID int, taskData models.Task, r *http.Request,
 	return task, nil
 }
 
+// Locks a task in the database by ID
 func (db Database) LockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
@@ -192,6 +202,7 @@ func (db Database) LockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTA
 	return nil
 }
 
+// Unlocks a task in the database by ID
 func (db Database) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
 	isManager, err := db.IsManager(r, tokenAuth, token)
 	if err != nil {
@@ -220,7 +231,8 @@ func (db Database) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JW
 	return nil
 }
 
-func (db Database) GetTaskFromCSV(path string) (models.TaskList, error) {
+// Import tasks data from a CSV file
+func (db Database) ImportTaskDataFromCSV(path string) (models.TaskList, error) {
 	// Create a slice to store the task data
 	taskList := models.TaskList{}
 

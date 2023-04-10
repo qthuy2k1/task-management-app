@@ -216,7 +216,7 @@ func importTaskCSV(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
 	}
 	path := r.PostForm.Get("path")
-	taskList, err := dbInstance.GetTaskFromCSV(path)
+	taskList, err := dbInstance.ImportTaskDataFromCSV(path)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return

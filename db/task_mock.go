@@ -40,6 +40,10 @@ func (m *MockTaskService) LockTask(taskID int, r *http.Request, tokenAuth *jwtau
 }
 
 func (m *MockTaskService) UnLockTask(taskID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-	args := m.Called(taskID, r, tokenAuth, token)
+	args := m.Called(taskID)
 	return args.Error(0)
+}
+func (m *MockTaskService) ImportTaskDataFromCSV(path string) (models.TaskList, error) {
+	args := m.Called(path)
+	return args.Get(0).(models.TaskList), args.Error(1)
 }
