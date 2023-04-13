@@ -30,22 +30,9 @@ services:
     volumes:
       - postgres-db:/var/lib/postgresql/data
 
-  # migrate:
-  #   image: migrate/migrate
-  #   networks:
-  #       - new
-  #   volumes:
-  #       - /c/Users/thuy.nguyen/go/task-management-app/db/migrations:/migrations
-  #   command: ["-path", "/migrations", "-database",  "postgres://postgres:root@postgres:5432/task-management-db?sslmode=disable", "force", "1"]
-  #   links: 
-  #       - postgres
-  #   depends_on:
-  #       - postgres
-
 volumes:
   postgres-db:
 
 networks:
   new:
-
 

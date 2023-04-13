@@ -4,8 +4,8 @@ no-tests = true
 add-enum-types = true
 
 [psql]
+  host = "postgres"
   dbname = "task-management-db"
-  host   = "host.docker.internal"
   port   = 5432
   user   = "postgres"
   pass   = "root"
