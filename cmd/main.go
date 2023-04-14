@@ -15,6 +15,7 @@ import (
 
 	"github.com/qthuy2k1/task-management-app/db"
 	"github.com/qthuy2k1/task-management-app/handler"
+	"github.com/volatiletech/sqlboiler/v4/boil"
 
 	"github.com/joho/godotenv"
 )
@@ -33,6 +34,7 @@ func main() {
 	dbUrl := os.Getenv("DB_URL")
 
 	database, err := db.Initialize(dbUrl)
+	boil.SetDB(database.Conn)
 	if err != nil {
 		log.Fatalf("Could not set up database: %v", err)
 	}

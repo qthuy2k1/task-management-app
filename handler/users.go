@@ -1,9 +1,10 @@
 package handler
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -16,7 +17,9 @@ import (
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
-var userIDKey = "user_id"
+type success struct {
+	Status string `json:"status"`
+}
 
 func users(router chi.Router) {
 	router.Get("/", getAllUsers)
@@ -27,7 +30,7 @@ func users(router chi.Router) {
 		router.Put("/", updateUser)
 		router.Patch("/update-role", updateRole)
 		router.Delete("/", deleteUser)
-		router.Post("/get-tasks", getAllTaskAssignedToUser)
+		// router.Post("/get-tasks", getAllTaskAssignedToUser)
 	})
 }
 
@@ -58,50 +61,47 @@ func validateUserIDFromURLParam(r *http.Request) (int, error) {
 	return id, nil
 
 }
-
-func createUser(w http.ResponseWriter, r *http.Request, userData models.User) {
-	if err := dbInstance.AddUser(&userData); err != nil {
-		render.Render(w, r, ErrorRenderer(err))
-		return
-	}
-	if err := render.Render(w, r, &userData); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	http.Redirect(w, r, "/profile", http.StatusFound)
-}
-
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := dbInstance.GetAllUsers(r, tokenAuth)
+	users, err := dbInstance.GetAllUsers(ctx, r, tokenAuth)
 	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := render.Render(w, r, users); err != nil {
-		render.Render(w, r, ErrorRenderer(err))
+	jsonBytes, err := json.Marshal(users)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
+
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
 	userID, err := validateUserIDFromURLParam(r)
 	if err != nil {
-		render.Render(w, r, ErrorRenderer(err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	user, err := dbInstance.GetUserByID(userID)
+	user, err := dbInstance.GetUserByID(userID, ctx)
 	if err != nil {
 		if err == db.ErrNoMatch {
-			render.Render(w, r, ErrNotFound)
+			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
-			render.Render(w, r, ErrorRenderer(err))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		return
 	}
-	if err := render.Render(w, r, &user); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+
+	jsonBytes, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
+
 }
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -115,16 +115,27 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err = dbInstance.DeleteUser(userID, r, tokenAuth, token)
+	rowsAff, err := dbInstance.DeleteUser(userID, ctx, r, tokenAuth, token)
+
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if rowsAff == 0 {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
 		return
 	}
+	s := success{
+		Status: "success",
+	}
+	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+	w.Write(jsonBytes)
 }
+
 func updateUser(w http.ResponseWriter, r *http.Request) {
 	userID, err := validateUserIDFromURLParam(r)
 	if err != nil {
@@ -132,11 +143,20 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userData := models.User{}
-	if err := render.Bind(r, &userData); err != nil {
-		render.Render(w, r, ErrBadRequest)
+
+	// Read request body into a []byte variable
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	user, err := dbInstance.UpdateUser(userID, userData)
+
+	// Parse JSON request body into a User struct
+	err = json.Unmarshal(body, &userData)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	user, err := dbInstance.UpdateUser(userID, userData, ctx)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -145,10 +165,13 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := render.Render(w, r, &user); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+	jsonBytes, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
 
 func updateRole(w http.ResponseWriter, r *http.Request) {
@@ -162,12 +185,12 @@ func updateRole(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("the role must be either 'manager' or 'user'")))
 		return
 	}
-	userID, ok := r.Context().Value(userIDKey).(int)
-	if !ok {
-		render.Render(w, r, ErrorRenderer(fmt.Errorf("cannot get the user id")))
+	userID, err := validateUserIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	user, err := dbInstance.UpdateRole(userID, role)
+	user, err := dbInstance.UpdateRole(userID, role, ctx)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -176,10 +199,13 @@ func updateRole(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := render.Render(w, r, &user); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+	jsonBytes, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
 
 func changeUserPassword(w http.ResponseWriter, r *http.Request) {
@@ -189,15 +215,23 @@ func changeUserPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	oldPassword := r.PostForm.Get("oldPassword")
 	newPassword := r.PostForm.Get("newPassword")
-	err = dbInstance.ChangeUserPassword(oldPassword, newPassword, r, tokenAuth)
+	err = dbInstance.ChangeUserPassword(oldPassword, newPassword, ctx, r, tokenAuth)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
+	s := success{
+		Status: "success",
+	}
+	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+	w.Write(jsonBytes)
 }
 
 func signup(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	err := r.ParseForm()
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
@@ -207,7 +241,6 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	user.Email = r.PostForm.Get("email")
 	user.Password = r.PostForm.Get("password")
 	user.Role = "user"
-	context.WithValue(ctx, "user", user)
 
 	if user.Name == "" {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("missing name")))
@@ -238,12 +271,18 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		Value: token,
 	})
 	r = r.WithContext(ctx)
-	createUser(w, r, user)
-	fmt.Println("123")
+	if err := dbInstance.AddUser(&user, ctx); err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+	_, err = json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 
 	w.Write([]byte("Sign up successful"))
-	http.Redirect(w, r, "/profile", http.StatusTemporaryRedirect)
-
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +310,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	token := MakeToken(email, password)
 
 	// Check if the email and password are valid
-	ok, err := dbInstance.CompareEmailAndPassword(email, password, r, tokenAuth)
+	ok, err := dbInstance.CompareEmailAndPassword(email, password, ctx, r, tokenAuth)
 	if !ok {
 		render.Render(w, r, ErrorRenderer(err))
 		return
@@ -289,9 +328,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 	})
 	// Write the response with a success message
 	w.Write([]byte(fmt.Sprintf(`Login successful, your email is: %s`, email)))
-
-	// Redirect the user to the main page
-	// http.Redirect(w, r, "/users/", http.StatusSeeOther)
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
@@ -304,6 +340,7 @@ func logout(w http.ResponseWriter, r *http.Request) {
 		Name:  "jwt",
 		Value: "",
 	})
+	w.Write([]byte(`Logout successful`))
 }
 
 func profileUser(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +351,7 @@ func profileUser(w http.ResponseWriter, r *http.Request) {
 	}
 	userEmail, _ := token.Get("email")
 
-	user, err := dbInstance.GetUserByEmail(userEmail.(string))
+	user, err := dbInstance.GetUserByEmail(userEmail.(string), ctx)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -323,9 +360,12 @@ func profileUser(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := render.Render(w, r, &user); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+	jsonBytes, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 
 }

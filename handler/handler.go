@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,8 +13,8 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 )
 
-var dbInstance db.Database
 var tokenAuth *jwtauth.JWTAuth
+var dbInstance db.Database
 
 const Secret = "<my-secret-key-1010>"
 
@@ -21,13 +22,15 @@ func init() {
 	tokenAuth = jwtauth.New("HS256", []byte(Secret), nil)
 }
 
+var ctx = context.Background()
+
 func NewHandler(db db.Database) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
-	dbInstance = db
 	r.MethodNotAllowed(methodNotAllowedHandler)
 	r.NotFound(notFoundHandler)
+	dbInstance = db
 
 	// protected routes
 	r.Group(func(r chi.Router) {
@@ -42,10 +45,10 @@ func NewHandler(db db.Database) http.Handler {
 
 		r.Use(jwtauth.Verifier(tokenAuth))
 		// send 401 Unauthorized response for any unverified
-		r.Use(jwtauth.Authenticator)
+		// r.Use(jwtauth.Authenticator)
 
 		r.Route("/users", users)
-		r.Route("/task-categories", taskCategories)
+		// r.Route("/task-categories", taskCategories)
 		r.Route("/tasks", tasks)
 	})
 
@@ -86,5 +89,5 @@ func GetToken(r *http.Request, tokenAuth *jwtauth.JWTAuth) jwt.Token {
 }
 
 func welcome(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Welcome anonymous"))
+	w.Write([]byte("Welcome anonymous 123213123123"))
 }

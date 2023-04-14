@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -14,12 +16,10 @@ import (
 	"github.com/qthuy2k1/task-management-app/models"
 )
 
-var taskIDKey = "taskID"
-
 func tasks(router chi.Router) {
 	router.Get("/", getAllTasks)
 	router.Post("/", createTask)
-	router.Post("/csv", importTaskCSV)
+	// router.Post("/csv", importTaskCSV)
 	router.Route("/{taskID}", func(router chi.Router) {
 		router.Get("/", getTask)
 		router.Put("/", updateTask)
@@ -27,9 +27,9 @@ func tasks(router chi.Router) {
 		router.Delete("/", deleteTask)
 		router.Put("/lock", lockTask)
 		router.Put("/unlock", unLockTask)
-		router.Post("/add-user", createUserTaskDetail)
-		router.Post("/delete-user", deleteUserFromTask)
-		router.Get("/get-users", getAllUserAsignnedToTask)
+		// router.Post("/add-user", createUserTaskDetail)
+		// router.Post("/delete-user", deleteUserFromTask)
+		// router.Get("/get-users", getAllUserAsignnedToTask)
 	})
 }
 
@@ -62,56 +62,74 @@ func validateTaskIDFromURLParam(r *http.Request) (int, error) {
 }
 
 func createTask(w http.ResponseWriter, r *http.Request) {
-	task := &models.Task{}
-	if err := render.Bind(r, task); err != nil {
-		render.Render(w, r, ErrBadRequest)
+	task := models.Task{}
+	// Read request body into a []byte variable
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// Parse JSON request body into a User struct
+	err = json.Unmarshal(body, &task)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
 	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	if err := dbInstance.AddTask(task, r, tokenAuth, token); err != nil {
+	if err := dbInstance.AddTask(&task, ctx, r, tokenAuth, token); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
-	if err := render.Render(w, r, task); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+	jsonBytes, err := json.Marshal(task)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
 
 func getAllTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := dbInstance.GetAllTasks(r, tokenAuth)
+	tasks, err := dbInstance.GetAllTasks(ctx, r, tokenAuth)
+
 	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := render.Render(w, r, tasks); err != nil {
-		render.Render(w, r, ErrorRenderer(err))
+	jsonBytes, err := json.Marshal(tasks)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
 
 func getTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := validateTaskIDFromURLParam(r)
 	if err != nil {
-		render.Render(w, r, ErrorRenderer(err))
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	task, err := dbInstance.GetTaskByID(taskID, r, tokenAuth)
+	task, err := dbInstance.GetTaskByID(taskID, ctx, r, tokenAuth)
 	if err != nil {
 		if err == db.ErrNoMatch {
-			render.Render(w, r, ErrNotFound)
+			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
-			render.Render(w, r, ErrorRenderer(err))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		return
 	}
-	if err := render.Render(w, r, &task); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+	jsonBytes, err := json.Marshal(task)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +143,7 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err = dbInstance.DeleteTask(taskID, r, tokenAuth, token)
+	err = dbInstance.DeleteTask(taskID, ctx, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -135,15 +153,11 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
 func updateTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := validateTaskIDFromURLParam(r)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
-		return
-	}
-	taskData := models.Task{}
-	if err := render.Bind(r, &taskData); err != nil {
-		render.Render(w, r, ErrBadRequest)
 		return
 	}
 	token := GetToken(r, tokenAuth)
@@ -151,7 +165,21 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	task, err := dbInstance.UpdateTask(taskID, taskData, r, tokenAuth, token)
+
+	taskData := models.Task{}
+	// Read request body into a []byte variable
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse JSON request body into a User struct
+	err = json.Unmarshal(body, &taskData)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	task, err := dbInstance.UpdateTask(taskID, taskData, ctx, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("you are not the manager")))
@@ -160,10 +188,13 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := render.Render(w, r, &task); err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
+	jsonBytes, err := json.Marshal(task)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
 
 func lockTask(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +208,7 @@ func lockTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err = dbInstance.LockTask(taskID, r, tokenAuth, token)
+	err = dbInstance.LockTask(taskID, ctx, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -199,7 +230,7 @@ func unLockTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err = dbInstance.UnLockTask(taskID, r, tokenAuth, token)
+	err = dbInstance.UnLockTask(taskID, ctx, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
@@ -210,30 +241,30 @@ func unLockTask(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func importTaskCSV(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	if err != nil {
-		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
-	}
-	path := r.PostForm.Get("path")
-	taskList, err := dbInstance.ImportTaskDataFromCSV(path)
-	if err != nil {
-		render.Render(w, r, ErrorRenderer(err))
-		return
-	}
-	token := GetToken(r, tokenAuth)
-	for _, task := range taskList.Tasks {
-		if err := dbInstance.AddTask(&task, r, tokenAuth, token); err != nil {
-			render.Render(w, r, ErrorRenderer(err))
-			return
-		}
-		if err = dbInstance.AddUserToTask(task.AuthorID, task.ID, r, tokenAuth, token); err != nil {
-			render.Render(w, r, ErrorRenderer(err))
-			return
-		}
-	}
-	if err := render.Render(w, r, &taskList); err != nil {
-		render.Render(w, r, ErrorRenderer(err))
-		return
-	}
-}
+// func importTaskCSV(w http.ResponseWriter, r *http.Request) {
+// 	err := r.ParseForm()
+// 	if err != nil {
+// 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+// 	}
+// 	path := r.PostForm.Get("path")
+// 	taskList, err := dbInstance.ImportTaskDataFromCSV(path)
+// 	if err != nil {
+// 		render.Render(w, r, ErrorRenderer(err))
+// 		return
+// 	}
+// 	token := GetToken(r, tokenAuth)
+// 	for _, task := range taskList.Tasks {
+// 		if err := dbInstance.AddTask(&task, r, tokenAuth, token); err != nil {
+// 			render.Render(w, r, ErrorRenderer(err))
+// 			return
+// 		}
+// 		if err = dbInstance.AddUserToTask(task.AuthorID, task.ID, r, tokenAuth, token); err != nil {
+// 			render.Render(w, r, ErrorRenderer(err))
+// 			return
+// 		}
+// 	}
+// 	if err := render.Render(w, r, &taskList); err != nil {
+// 		render.Render(w, r, ErrorRenderer(err))
+// 		return
+// 	}
+// }

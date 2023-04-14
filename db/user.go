@@ -1,214 +1,141 @@
 package db
 
 import (
-	"database/sql"
+	"context"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/qthuy2k1/task-management-app/models"
+	"github.com/volatiletech/sqlboiler/v4/boil"
+	. "github.com/volatiletech/sqlboiler/v4/queries/qm"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Retrieves all users from the database
-func (db Database) GetAllUsers(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.UserList, error) {
-	list := &models.UserList{}
-
-	stmt, err := db.Conn.Prepare("SELECT * FROM users;")
+func (db Database) GetAllUsers(ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.UserSlice, error) {
+	users, err := models.Users().All(ctx, db.Conn)
 	if err != nil {
-		return list, err
+		return users, err
 	}
-	defer stmt.Close()
-
-	rows, err := stmt.Query()
-	if err != nil {
-		return list, err
-	}
-	// loop all rows and append into list
-	for rows.Next() {
-		var user models.User
-		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role)
-		if err != nil {
-			return list, err
-		}
-		list.Users = append(list.Users, user)
-	}
-	return list, nil
+	return users, nil
 }
 
 // Adds a new user to the database
-func (db Database) AddUser(user *models.User) error {
+func (db Database) AddUser(user *models.User, ctx context.Context) error {
 	// Sanitize and hash password
-	password := user.Santize(user.Password)
-	hashedPassword, err := user.Hash(password)
+	password := html.EscapeString(strings.TrimSpace(user.Password))
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	hashedPasswordStr := string(hashedPassword)
+	user.Password = hashedPasswordStr
 	if err != nil {
 		return err
 	}
 
-	query := `INSERT INTO users(name, email, password, role) VALUES($1, $2, $3, $4) RETURNING id;`
-	stmt, err := db.Conn.Prepare(query)
+	err = user.Insert(ctx, db.Conn, boil.Infer())
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
-
-	var id int
-	err = stmt.QueryRow(user.Name, user.Email, hashedPassword, user.Role).Scan(&id)
-	if err != nil {
-		return err
-	}
-
-	// Set the ID of the user object to the newly created ID
-	user.ID = id
-
 	return nil
 }
 
 // Retrieves a user by their ID from the database
-func (db Database) GetUserByID(userID int) (models.User, error) {
-	user := models.User{}
-	query := "SELECT * FROM users WHERE id = $1;"
-	stmt, err := db.Conn.Prepare(query)
+func (db Database) GetUserByID(userID int, ctx context.Context) (*models.User, error) {
+	user, err := models.Users(Where("id = ?", userID)).One(ctx, db.Conn)
 	if err != nil {
 		return user, err
 	}
-	defer stmt.Close()
-
-	row := stmt.QueryRow(userID)
-	switch err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role); err {
-	case sql.ErrNoRows:
-		return user, ErrNoMatch
-	default:
-		return user, err
-	}
+	return user, nil
 }
 
 // Retrieves a user by their email from the database
-func (db Database) GetUserByEmail(userEmail string) (models.User, error) {
-	user := models.User{}
-	query := `SELECT * FROM users WHERE email = $1;`
-	stmt, err := db.Conn.Prepare(query)
+func (db Database) GetUserByEmail(userEmail string, ctx context.Context) (*models.User, error) {
+	user, err := models.Users(Where("email = ?", userEmail)).One(ctx, db.Conn)
 	if err != nil {
 		return user, err
 	}
-	defer stmt.Close()
-
-	row := stmt.QueryRow(userEmail)
-	switch err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role); err {
-	case sql.ErrNoRows:
-		return user, ErrNoMatch
-	default:
-		return user, err
-	}
+	return user, nil
 }
 
 // Deletes a user from the database, but only if the user is a manager
-func (db Database) DeleteUser(userID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-	isManager, err := db.IsManager(r, tokenAuth, token)
+func (db Database) DeleteUser(userID int, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (int64, error) {
+	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	if !isManager {
-		return errors.New("you are not the manager")
+		return -1, errors.New("you are not the manager")
 	}
 
-	query := `DELETE FROM users WHERE id = $1`
-	stmt, err := db.Conn.Prepare(query)
+	rowsAff, err := models.Users(Where("id = ?", userID)).DeleteAll(ctx, db.Conn)
 	if err != nil {
-		return err
+		return -1, err
 	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(userID)
-	switch err {
-	case sql.ErrNoRows:
-		return ErrNoMatch
-	default:
-		return err
-	}
+	return rowsAff, nil
 }
 
 // Updates a user's name and email in the database, given their ID
-func (db Database) UpdateUser(userID int, userData models.User) (models.User, error) {
-	user := models.User{}
-
-	query := `UPDATE users SET name=$1, email=$2 WHERE id=$3 RETURNING id, name, email, role;`
-	stmt, err := db.Conn.Prepare(query)
+func (db Database) UpdateUser(userID int, userData models.User, ctx context.Context) (*models.User, error) {
+	user, err := models.Users(Where("id = ?", userID)).One(ctx, db.Conn)
 	if err != nil {
 		return user, err
 	}
-
-	defer stmt.Close()
-
-	err = stmt.QueryRow(userData.Name, userData.Email, userID).Scan(&user.ID, &user.Name, &user.Email, &user.Role)
+	user.Name = userData.Name
+	user.Email = userData.Email
+	rowsAff, err := user.Update(ctx, db.Conn, boil.Infer())
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return user, ErrNoMatch
-		}
 		return user, err
+	}
+	if rowsAff == 0 {
+		return user, ErrNoMatch
 	}
 	return user, nil
 }
 
 // Updates a user's role in the database, given their ID
-func (db Database) UpdateRole(userID int, role string) (models.User, error) {
-	user, err := db.GetUserByID(userID)
+func (db Database) UpdateRole(userID int, role string, ctx context.Context) (*models.User, error) {
+	user, err := models.Users(Where("id = ?", userID)).One(ctx, db.Conn)
 	if err != nil {
 		return user, err
 	}
-
-	query := `UPDATE users SET role=$1 WHERE id=$2 RETURNING id, name, email, role;`
-	stmt, err := db.Conn.Prepare(query)
+	user.Role = role
+	rowsAff, err := user.Update(ctx, db.Conn, boil.Infer())
 	if err != nil {
 		return user, err
 	}
-
-	defer stmt.Close()
-
-	err = stmt.QueryRow(role, user.ID).Scan(&user.ID, &user.Name, &user.Email, &user.Role)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return user, ErrNoMatch
-		}
-		return user, err
+	if rowsAff == 0 {
+		return user, ErrNoMatch
 	}
 	return user, nil
 }
 
 // Checks if a user is a manager
-func (db Database) IsManager(r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (bool, error) {
+func (db Database) IsManager(ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (bool, error) {
 	email, _ := token.Get("email")
 
-	// Prepare a statement to retrieve the count of users with a given email and role
-	stmt, err := db.Conn.Prepare(`SELECT COUNT(*) FROM users WHERE email=$1 AND role='manager'`)
+	count, err := models.Users(Where("email = ?", email), Where("role = ?", "manager")).Count(ctx, db.Conn)
 	if err != nil {
 		return false, err
 	}
-
-	defer stmt.Close()
-
-	var count int
-	err = stmt.QueryRow(email).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-
 	return count > 0, nil
 }
 
 // Compares the email and password entered by the user with the emails and passwords stored in the database
-func (db Database) CompareEmailAndPassword(email, password string, r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool, error) {
+func (db Database) CompareEmailAndPassword(email, password string, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth) (bool, error) {
 	// Get all users and assign them to list
-	list, err := db.GetAllUsers(r, tokenAuth)
+	users, err := models.Users().All(ctx, db.Conn)
 	if err != nil {
 		return false, errors.New("cannot get list of users")
 	}
 	// Loop through the list of users and check if the email and password are correct
-	for _, x := range list.Users {
+	for _, x := range users {
 		if x.Email == email {
-			if err = x.CheckPasswordHash(x.Password, password); err == nil {
+			if err = bcrypt.CompareHashAndPassword([]byte(x.Password), []byte(password)); err == nil {
 				return true, nil
 			} else {
 				return false, errors.New("your password is wrong")
@@ -219,50 +146,37 @@ func (db Database) CompareEmailAndPassword(email, password string, r *http.Reque
 }
 
 // Changes a user's password in the database
-func (db Database) ChangeUserPassword(oldPassword, newPassword string, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
+func (db Database) ChangeUserPassword(oldPassword, newPassword string, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth) error {
 	// Get the token and decode it to get the email of the current user is logging in
 	token, err := tokenAuth.Decode(jwtauth.TokenFromCookie(r))
 	if err != nil {
 		return err
 	}
 
-	user := models.User{}
 	email, _ := token.Get("email")
 
 	// Convert email from interface{} to string
-	user.Email = email.(string)
+	email = email.(string)
 
-	// Prepare a statement for the query to retrieve password of user
-	stmt, err := db.Conn.Prepare("SELECT password FROM users WHERE email=$1")
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
-
-	err = stmt.QueryRow(user.Email).Scan(&user.Password)
+	user, err := models.Users(Where("email = ?", email)).One(ctx, db.Conn)
 	if err != nil {
 		return err
 	}
 
 	// Compare password hashed in db to the old password passed from the form value
-	if err = user.CheckPasswordHash(user.Password, oldPassword); err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
 		return fmt.Errorf("incorrect old password")
 	}
 
 	// Hash new password
-	hashedPassword, err := user.Hash(newPassword)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 14)
 	if err != nil {
 		return err
 	}
 
-	// Update the new hashed password for user
-	stmt, err = db.Conn.Prepare("UPDATE users SET password = $1 WHERE email = $2")
-	if err != nil {
-		return err
-	}
+	user.Password = string(hashedPassword)
 
-	_, err = stmt.Exec(hashedPassword, user.Email)
+	_, err = user.Update(ctx, db.Conn, boil.Infer())
 	if err != nil {
 		return err
 	}
