@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
-	"github.com/qthuy2k1/task-management-app/models"
+	models "github.com/qthuy2k1/task-management-app/models/gen"
 )
 
 func tasks(router chi.Router) {
@@ -27,9 +27,9 @@ func tasks(router chi.Router) {
 		router.Delete("/", deleteTask)
 		router.Put("/lock", lockTask)
 		router.Put("/unlock", unLockTask)
-		// router.Post("/add-user", createUserTaskDetail)
-		// router.Post("/delete-user", deleteUserFromTask)
-		// router.Get("/get-users", getAllUserAsignnedToTask)
+		router.Post("/add-user", createUserTaskDetail)
+		router.Post("/delete-user", deleteUserFromTask)
+		router.Get("/get-users", getAllUserAsignnedToTask)
 	})
 }
 
@@ -152,6 +152,15 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	s := success{
+		Status: "success",
+	}
+	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+	w.Write(jsonBytes)
 }
 
 func updateTask(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +191,7 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 	task, err := dbInstance.UpdateTask(taskID, taskData, ctx, r, tokenAuth, token)
 	if err != nil {
 		if err == db.ErrNoMatch {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("you are not the manager")))
+			render.Render(w, r, ErrorRenderer(fmt.Errorf("no rows afftected")))
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
@@ -213,10 +222,19 @@ func lockTask(w http.ResponseWriter, r *http.Request) {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
-			render.Render(w, r, ServerErrorRenderer(err))
+			render.Render(w, r, ErrorRenderer(err))
 		}
 		return
 	}
+	s := success{
+		Status: "success",
+	}
+	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+	w.Write(jsonBytes)
 }
 
 func unLockTask(w http.ResponseWriter, r *http.Request) {
@@ -235,10 +253,19 @@ func unLockTask(w http.ResponseWriter, r *http.Request) {
 		if err == db.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
-			render.Render(w, r, ServerErrorRenderer(err))
+			render.Render(w, r, ErrorRenderer(err))
 		}
 		return
 	}
+	s := success{
+		Status: "success",
+	}
+	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+		return
+	}
+	w.Write(jsonBytes)
 }
 
 // func importTaskCSV(w http.ResponseWriter, r *http.Request) {

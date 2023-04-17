@@ -45,10 +45,10 @@ func NewHandler(db db.Database) http.Handler {
 
 		r.Use(jwtauth.Verifier(tokenAuth))
 		// send 401 Unauthorized response for any unverified
-		// r.Use(jwtauth.Authenticator)
+		r.Use(jwtauth.Authenticator)
 
 		r.Route("/users", users)
-		// r.Route("/task-categories", taskCategories)
+		r.Route("/task-categories", taskCategories)
 		r.Route("/tasks", tasks)
 	})
 

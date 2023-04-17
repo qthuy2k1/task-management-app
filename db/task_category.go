@@ -1,158 +1,115 @@
 package db
 
-// import (
-// 	"database/sql"
-// 	"encoding/csv"
-// 	"errors"
-// 	"net/http"
-// 	"os"
-// 	"regexp"
+import (
+	"context"
+	"errors"
+	"net/http"
 
-// 	"github.com/go-chi/jwtauth/v5"
-// 	"github.com/lestrrat-go/jwx/v2/jwt"
-// 	"github.com/lib/pq"
-// 	"github.com/qthuy2k1/task-management-app/models"
-// )
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
+	models "github.com/qthuy2k1/task-management-app/models/gen"
+	"github.com/volatiletech/sqlboiler/v4/boil"
+	. "github.com/volatiletech/sqlboiler/v4/queries/qm"
+)
 
-// // Gets all task categories from the database
-// func (db Database) GetAllTaskCategories(r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.TaskCategoryList, error) {
-// 	list := &models.TaskCategoryList{}
-// 	query := "SELECT * FROM task_categories"
-// 	stmt, err := db.Conn.Prepare(query)
-// 	if err != nil {
-// 		return list, err
-// 	}
+// Gets all task categories from the database
+func (db Database) GetAllTaskCategories(ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.TaskCategorySlice, error) {
+	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
+	if err != nil {
+		return models.TaskCategorySlice{}, err
+	}
 
-// 	defer stmt.Close()
+	if !isManager {
+		return models.TaskCategorySlice{}, errors.New("you are not the manager")
+	}
 
-// 	rows, err := stmt.Query()
-// 	if err != nil {
-// 		return list, err
-// 	}
-// 	// loop all rows and append into list
-// 	for rows.Next() {
-// 		var taskCategory models.TaskCategory
-// 		err := rows.Scan(&taskCategory.ID, &taskCategory.Name)
-// 		if err != nil {
-// 			return list, err
-// 		}
-// 		list.TaskCategories = append(list.TaskCategories, taskCategory)
-// 	}
-// 	return list, nil
-// }
+	taskCategories, err := models.TaskCategories().All(ctx, db.Conn)
+	if err != nil {
+		return taskCategories, err
+	}
+	return taskCategories, nil
+}
 
-// // Adds a new task category to the database
-// func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-// 	if taskCategory.Name == "" {
-// 		return errors.New("bad request")
-// 	}
-// 	isManager, err := db.IsManager(r, tokenAuth, token)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if !isManager {
-// 		return errors.New("you are not the manager")
-// 	}
-// 	var id int
+// Adds a new task category to the database
+func (db Database) AddTaskCategory(taskCategory *models.TaskCategory, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	if taskCategory.Name == "" {
+		return errors.New("bad request")
+	}
+	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
+	if err != nil {
+		return err
+	}
+	if !isManager {
+		return errors.New("you are not the manager")
+	}
+	err = taskCategory.Insert(ctx, db.Conn, boil.Infer())
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-// 	// insert into taskCategorys table
-// 	query := `INSERT INTO task_categories(name) VALUES($1) RETURNING id;`
-// 	stmt, err := db.Conn.Prepare(query)
-// 	if err != nil {
-// 		return err
-// 	}
+// Gets a task category from the database by ID
+func (db Database) GetTaskCategoryByID(taskCategoryID int, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (*models.TaskCategory, error) {
+	taskCategory := &models.TaskCategory{}
+	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
+	if err != nil {
+		return taskCategory, err
+	}
+	if !isManager {
+		return taskCategory, errors.New("you are not the manager")
+	}
+	taskCategory, err = models.TaskCategories(Where("id = ?", taskCategoryID)).One(ctx, db.Conn)
+	if err != nil {
+		return taskCategory, err
+	}
+	return taskCategory, nil
+}
 
-// 	defer stmt.Close()
+// Deletes a task category from the database by ID
+func (db Database) DeleteTaskCategory(taskCategoryID int, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
+	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
+	if err != nil {
+		return err
+	}
+	if !isManager {
+		return errors.New("you are not the manager")
+	}
+	rowsAff, err := models.TaskCategories(Where("id = ?", taskCategoryID)).DeleteAll(ctx, db.Conn)
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrNoMatch
+	}
+	return err
+}
 
-// 	quotedName := pq.QuoteLiteral(taskCategory.Name)
-// 	err = stmt.QueryRow(quotedName).Scan(&id)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	taskCategory.ID = id
-// 	return nil
-// }
+// Updates a task category in the database by ID
+func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (*models.TaskCategory, error) {
+	taskCategory := &models.TaskCategory{}
+	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
+	if err != nil {
+		return taskCategory, err
+	}
+	if !isManager {
+		return taskCategory, errors.New("you are not the manager")
+	}
+	taskCategory, err = models.TaskCategories(Where("id = ?", taskCategoryID)).One(ctx, db.Conn)
+	if err != nil {
+		return taskCategory, err
+	}
+	taskCategory.Name = taskCategoryData.Name
 
-// // Gets a task category from the database by ID
-// func (db Database) GetTaskCategoryByID(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.TaskCategory, error) {
-// 	taskCategory := models.TaskCategory{}
-// 	query := `SELECT * FROM task_categories WHERE id = $1;`
-// 	stmt, err := db.Conn.Prepare(query)
-// 	if err != nil {
-// 		return taskCategory, err
-// 	}
-
-// 	defer stmt.Close()
-
-// 	row := stmt.QueryRow(taskCategoryID)
-// 	switch err := row.Scan(&taskCategory.ID, &taskCategory.Name); err {
-// 	case sql.ErrNoRows:
-// 		return taskCategory, ErrNoMatch
-// 	default:
-// 		return taskCategory, err
-// 	}
-// }
-
-// // Deletes a task category from the database by ID
-// func (db Database) DeleteTaskCategory(taskCategoryID int, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-// 	isManager, err := db.IsManager(r, tokenAuth, token)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if !isManager {
-// 		return errors.New("you are not the manager")
-// 	}
-// 	query := `DELETE FROM task_categories WHERE id = $1`
-// 	stmt, err := db.Conn.Prepare(query)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	defer stmt.Close()
-
-// 	_, err = stmt.Exec(taskCategoryID)
-// 	switch err {
-// 	case sql.ErrNoRows:
-// 		return ErrNoMatch
-// 	default:
-// 		return err
-// 	}
-// }
-
-// // Updates a task category in the database by ID
-// func (db Database) UpdateTaskCategory(taskCategoryID int, taskCategoryData models.TaskCategory, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.TaskCategory, error) {
-// 	taskCategory := models.TaskCategory{}
-// 	isManager, err := db.IsManager(r, tokenAuth, token)
-// 	if err != nil {
-// 		return taskCategory, err
-// 	}
-// 	if !isManager {
-// 		return taskCategory, errors.New("you are not the manager")
-// 	}
-// 	taskCategory, err = db.GetTaskCategoryByID(taskCategoryID, r, tokenAuth)
-// 	if err != nil {
-// 		if err == sql.ErrNoRows {
-// 			return taskCategory, ErrNoMatch
-// 		}
-// 		return taskCategory, err
-// 	}
-// 	query := `UPDATE task_categories SET name=$1 WHERE id=$2 RETURNING *;`
-// 	stmt, err := db.Conn.Prepare(query)
-// 	if err != nil {
-// 		return taskCategory, err
-// 	}
-
-// 	defer stmt.Close()
-
-// 	err = stmt.QueryRow(taskCategoryData.Name, taskCategory.ID).Scan(&taskCategory.ID, &taskCategory.Name)
-// 	if err != nil {
-// 		if err == sql.ErrNoRows {
-// 			return taskCategory, ErrNoMatch
-// 		}
-// 		return taskCategory, err
-// 	}
-// 	return taskCategory, nil
-// }
+	rowsAff, err := taskCategory.Update(ctx, db.Conn, boil.Infer())
+	if err != nil {
+		return taskCategory, err
+	}
+	if rowsAff == 0 {
+		return taskCategory, ErrNoMatch
+	}
+	return taskCategory, nil
+}
 
 // // Import task categories data from a CSV file
 // func (db Database) ImportTaskCategoryDataFromCSV(path string) (models.TaskCategoryList, error) {

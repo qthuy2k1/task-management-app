@@ -11,3 +11,4 @@ add-enum-types = true
   pass   = "root"
   blacklist = ["migrations", "other"]
   sslmode = "disable"
+  schema = "public"

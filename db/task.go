@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/qthuy2k1/task-management-app/models"
+	models "github.com/qthuy2k1/task-management-app/models/gen"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	. "github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
@@ -83,8 +83,8 @@ func (db Database) DeleteTask(taskID int, ctx context.Context, r *http.Request, 
 }
 
 // Updates a task in the database by ID
-func (db Database) UpdateTask(taskID int, taskData models.Task, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (models.Task, error) {
-	task := models.Task{}
+func (db Database) UpdateTask(taskID int, taskData models.Task, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (*models.Task, error) {
+	task := &models.Task{}
 
 	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
 	if err != nil {
@@ -92,8 +92,14 @@ func (db Database) UpdateTask(taskID int, taskData models.Task, ctx context.Cont
 	}
 
 	if !isManager && taskData.Status.String == "Lock" {
-		return task, errors.New("you are not manager, cannot lock this task.")
+		return task, errors.New("you are not manager, cannot lock this task")
 	}
+
+	task, err = models.Tasks(Where("id = ?", taskID)).One(ctx, db.Conn)
+	if err != nil {
+		return task, err
+	}
+
 	task.Name = taskData.Name
 	task.Description = taskData.Description
 	task.StartDate = taskData.StartDate

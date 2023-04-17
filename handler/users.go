@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/qthuy2k1/task-management-app/db"
-	"github.com/qthuy2k1/task-management-app/models"
+	models "github.com/qthuy2k1/task-management-app/models/gen"
 )
 
 type success struct {
@@ -30,7 +30,7 @@ func users(router chi.Router) {
 		router.Put("/", updateUser)
 		router.Patch("/update-role", updateRole)
 		router.Delete("/", deleteUser)
-		// router.Post("/get-tasks", getAllTaskAssignedToUser)
+		router.Post("/get-tasks", getAllTaskAssignedToUser)
 	})
 }
 

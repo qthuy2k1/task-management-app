@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/qthuy2k1/task-management-app/models"
+	models "github.com/qthuy2k1/task-management-app/models/gen"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	. "github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"golang.org/x/crypto/bcrypt"
@@ -37,6 +37,7 @@ func (db Database) AddUser(user *models.User, ctx context.Context) error {
 		return err
 	}
 
+	fmt.Println(user)
 	err = user.Insert(ctx, db.Conn, boil.Infer())
 	if err != nil {
 		return err
