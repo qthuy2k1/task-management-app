@@ -7,4 +7,4 @@ migrate:
 sqlboiler:
 	docker run --rm -it -v C:/Users/thuy.nguyen/go/task-management-app/sqlboiler.toml:/sqlboiler.toml:ro -v C:/Users/thuy.nguyen/go/task-management-app/models:/models:rw --network task-management-app_new goodwithtech/sqlboiler:latest --wipe /sqlboiler-psql --output models/gen
 
-.PHONY: postgres migrate
+.PHONY: postgres migrate sqlboiler

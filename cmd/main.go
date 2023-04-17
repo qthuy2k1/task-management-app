@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/qthuy2k1/task-management-app/db"
-	"github.com/qthuy2k1/task-management-app/handler"
+	"github.com/qthuy2k1/task-management-app/internal/handler"
+	"github.com/qthuy2k1/task-management-app/internal/repository"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 
 	"github.com/joho/godotenv"
@@ -33,7 +33,7 @@ func main() {
 
 	dbUrl := os.Getenv("DB_URL")
 
-	database, err := db.Initialize(dbUrl)
+	database, err := repository.Initialize(dbUrl)
 	boil.SetDB(database.Conn)
 	if err != nil {
 		log.Fatalf("Could not set up database: %v", err)
