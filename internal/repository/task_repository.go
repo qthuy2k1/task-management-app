@@ -2,18 +2,18 @@ package repository
 
 import (
 	"context"
-	"errors"
-	"net/http"
-	"time"
 
-	"github.com/go-chi/jwtauth/v5"
-	"github.com/lestrrat-go/jwx/v2/jwt"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	. "github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
 type TaskRepository struct {
+	Database *Database
+}
+
+func NewTaskRepository(database *Database) *TaskRepository {
+	return &TaskRepository{Database: database}
 }
 
 // define an enum for Status of task
@@ -26,8 +26,8 @@ const (
 	Lock       TaskStatus = "Lock"
 )
 
-func (re *TaskRepository) GetAllTasks(db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth) (models.TaskSlice, error) {
-	tasks, err := models.Tasks().All(ctx, db.Conn)
+func (re *TaskRepository) GetAllTasks(ctx context.Context) (models.TaskSlice, error) {
+	tasks, err := models.Tasks().All(ctx, re.Database.Conn)
 	if err != nil {
 		return tasks, err
 	}
@@ -35,20 +35,8 @@ func (re *TaskRepository) GetAllTasks(db Database, ctx context.Context, r *http.
 }
 
 // Adds a new task to the database
-func (re *TaskRepository) AddTask(task *models.Task, db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
-	if err != nil {
-		return err
-	}
-	if !isManager {
-		return errors.New("you are not the manager")
-	}
-
-	var createdAt time.Time
-	task.CreatedAt = createdAt
-	task.UpdatedAt = createdAt
-
-	err = task.Insert(ctx, db.Conn, boil.Infer())
+func (re *TaskRepository) AddTask(task *models.Task, ctx context.Context) error {
+	err := task.Insert(ctx, re.Database.Conn, boil.Infer())
 	if err != nil {
 		return err
 	}
@@ -56,8 +44,8 @@ func (re *TaskRepository) AddTask(task *models.Task, db Database, ctx context.Co
 }
 
 // Retrieves a task from the database by ID
-func (re *TaskRepository) GetTaskByID(taskID int, db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth) (*models.Task, error) {
-	task, err := models.Tasks(Where("id = ?", taskID)).One(ctx, db.Conn)
+func (re *TaskRepository) GetTaskByID(taskID int, ctx context.Context) (*models.Task, error) {
+	task, err := models.Tasks(Where("id = ?", taskID)).One(ctx, re.Database.Conn)
 
 	if err != nil {
 		return task, err
@@ -66,16 +54,8 @@ func (re *TaskRepository) GetTaskByID(taskID int, db Database, ctx context.Conte
 }
 
 // Deletes a task from the database by ID
-func (re *TaskRepository) DeleteTask(taskID int, db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
-	if err != nil {
-		return err
-	}
-	if !isManager {
-		return errors.New("you are not the manager")
-	}
-
-	rowsAff, err := models.Tasks(Where("id = ?", taskID)).DeleteAll(ctx, db.Conn)
+func (re *TaskRepository) DeleteTask(taskID int, ctx context.Context) error {
+	rowsAff, err := models.Tasks(Where("id = ?", taskID)).DeleteAll(ctx, re.Database.Conn)
 	if err != nil {
 		return err
 	}
@@ -86,33 +66,8 @@ func (re *TaskRepository) DeleteTask(taskID int, db Database, ctx context.Contex
 }
 
 // Updates a task in the database by ID
-func (re *TaskRepository) UpdateTask(taskID int, taskData models.Task, db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) (*models.Task, error) {
-	task := &models.Task{}
-
-	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
-	if err != nil {
-		return task, err
-	}
-
-	if !isManager && taskData.Status.String == "Lock" {
-		return task, errors.New("you are not manager, cannot lock this task")
-	}
-
-	task, err = models.Tasks(Where("id = ?", taskID)).One(ctx, db.Conn)
-	if err != nil {
-		return task, err
-	}
-
-	task.Name = taskData.Name
-	task.Description = taskData.Description
-	task.StartDate = taskData.StartDate
-	task.EndDate = taskData.EndDate
-	task.Status = taskData.Status
-	task.AuthorID = taskData.AuthorID
-	task.UpdatedAt = time.Now()
-	task.TaskCategoryID = taskData.TaskCategoryID
-
-	rowsAff, err := task.Update(ctx, db.Conn, boil.Infer())
+func (re *TaskRepository) UpdateTask(task *models.Task, ctx context.Context) (*models.Task, error) {
+	rowsAff, err := task.Update(ctx, re.Database.Conn, boil.Infer())
 	if err != nil {
 		return task, err
 	}
@@ -124,15 +79,8 @@ func (re *TaskRepository) UpdateTask(taskID int, taskData models.Task, db Databa
 }
 
 // Locks a task in the database by ID
-func (re *TaskRepository) LockTask(taskID int, db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
-	if err != nil {
-		return err
-	}
-	if !isManager {
-		return errors.New("you are not the manager")
-	}
-	rowsAff, err := models.Tasks(Where("id = ?", taskID)).UpdateAll(ctx, db.Conn, models.M{"status": Lock})
+func (re *TaskRepository) LockTask(taskID int, ctx context.Context) error {
+	rowsAff, err := models.Tasks(Where("id = ?", taskID)).UpdateAll(ctx, re.Database.Conn, models.M{"status": Lock})
 	if err != nil {
 		return err
 	}
@@ -143,15 +91,8 @@ func (re *TaskRepository) LockTask(taskID int, db Database, ctx context.Context,
 }
 
 // Unlocks a task in the database by ID
-func (re *TaskRepository) UnLockTask(taskID int, db Database, ctx context.Context, r *http.Request, tokenAuth *jwtauth.JWTAuth, token jwt.Token) error {
-	isManager, err := db.IsManager(ctx, r, tokenAuth, token)
-	if err != nil {
-		return err
-	}
-	if !isManager {
-		return errors.New("you are not the manager")
-	}
-	rowsAff, err := models.Tasks(Where("id = ?", taskID)).UpdateAll(ctx, db.Conn, models.M{"status": InProgress})
+func (re *TaskRepository) UnLockTask(taskID int, ctx context.Context) error {
+	rowsAff, err := models.Tasks(Where("id = ?", taskID)).UpdateAll(ctx, re.Database.Conn, models.M{"status": InProgress})
 	if err != nil {
 		return err
 	}

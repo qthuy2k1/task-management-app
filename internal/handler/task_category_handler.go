@@ -12,21 +12,35 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/db"
-	models "github.com/qthuy2k1/task-management-app/models/gen"
+	"github.com/qthuy2k1/task-management-app/internal/controller"
+	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
+	"github.com/qthuy2k1/task-management-app/internal/repository"
 )
 
-func taskCategories(router chi.Router) {
-	router.Get("/", getAllTaskCategories)
-	router.Post("/", createTaskCategory)
+type TaskCategoryHandler struct {
+	TaskCategoryController *controller.TaskCategoryController
+	UserController         *controller.UserController
+}
+
+func NewTaskCategoryHandler(database *repository.Database) *TaskCategoryHandler {
+	taskCategoryRepository := repository.NewTaskCategoryRepository(database)
+	taskCategoryController := controller.NewTaskCategoryController(taskCategoryRepository)
+	userRepository := repository.NewUserRepository(database)
+	userController := controller.NewUserController(userRepository)
+	return &TaskCategoryHandler{TaskCategoryController: taskCategoryController, UserController: userController}
+}
+
+func (h *TaskCategoryHandler) taskCategories(router chi.Router) {
+	router.Get("/", h.getAllTaskCategories)
+	router.Post("/", h.createTaskCategory)
 	// router.Post("/csv", importTaskCategoryCSV)
 	router.Route("/{taskCategoryID}", func(router chi.Router) {
-		router.Get("/", getTaskCategory)
-		router.Put("/", updateTaskCategory)
-		router.Delete("/", deleteTaskCategory)
+		router.Get("/", h.getTaskCategory)
+		router.Put("/", h.updateTaskCategory)
+		router.Delete("/", h.deleteTaskCategory)
 	})
 }
-func validateTaskCategoryIDFromURLParam(r *http.Request) (int, error) {
+func (h *TaskCategoryHandler) validateTaskCategoryIDFromURLParam(r *http.Request) (int, error) {
 	taskCategoryID := chi.URLParam(r, "taskCategoryID")
 	if taskCategoryID == "" {
 		return 0, errors.New("task category ID is required")
@@ -54,7 +68,7 @@ func validateTaskCategoryIDFromURLParam(r *http.Request) (int, error) {
 
 }
 
-func createTaskCategory(w http.ResponseWriter, r *http.Request) {
+func (h *TaskCategoryHandler) createTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategory := &models.TaskCategory{}
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -76,7 +90,13 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := dbInstance.AddTaskCategory(taskCategory, ctx, r, tokenAuth, token); err != nil {
+	err = h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+
+	if err := h.TaskCategoryController.AddTaskCategory(taskCategory, ctx); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -89,13 +109,14 @@ func createTaskCategory(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
+func (h *TaskCategoryHandler) getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	taskCategories, err := dbInstance.GetAllTaskCategories(ctx, r, tokenAuth, token)
+
+	taskCategories, err := h.TaskCategoryController.GetAllTaskCategories(ctx)
 	if err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
@@ -109,8 +130,8 @@ func getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func getTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategoryID, err := validateTaskCategoryIDFromURLParam(r)
+func (h *TaskCategoryHandler) getTaskCategory(w http.ResponseWriter, r *http.Request) {
+	taskCategoryID, err := h.validateTaskCategoryIDFromURLParam(r)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 	}
@@ -119,9 +140,9 @@ func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	taskCategory, err := dbInstance.GetTaskCategoryByID(taskCategoryID, ctx, r, tokenAuth, token)
+	taskCategory, err := h.TaskCategoryController.GetTaskCategoryByID(taskCategoryID, ctx)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
@@ -137,8 +158,8 @@ func getTaskCategory(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategoryID, err := validateTaskCategoryIDFromURLParam(r)
+func (h *TaskCategoryHandler) deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
+	taskCategoryID, err := h.validateTaskCategoryIDFromURLParam(r)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 	}
@@ -147,9 +168,14 @@ func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err = dbInstance.DeleteTaskCategory(taskCategoryID, ctx, r, tokenAuth, token)
+	err = h.UserController.IsManager(ctx, r, tokenAuth)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+	err = h.TaskCategoryController.DeleteTaskCategory(taskCategoryID, ctx)
+	if err != nil {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -166,14 +192,19 @@ func deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write(jsonBytes)
 }
-func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
-	taskCategoryID, err := validateTaskCategoryIDFromURLParam(r)
+func (h *TaskCategoryHandler) updateTaskCategory(w http.ResponseWriter, r *http.Request) {
+	taskCategoryID, err := h.validateTaskCategoryIDFromURLParam(r)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err = h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
 	taskCategoryData := models.TaskCategory{}
@@ -187,9 +218,9 @@ func updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 	}
-	taskCategory, err := dbInstance.UpdateTaskCategory(taskCategoryID, taskCategoryData, ctx, r, tokenAuth, token)
+	taskCategory, err := h.TaskCategoryController.UpdateTaskCategory(taskCategoryID, taskCategoryData, ctx)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))

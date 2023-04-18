@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,13 +19,16 @@ import (
 )
 
 type UserHandler struct {
-	UserController *controller.UserController
+	UserController           *controller.UserController
+	UserTaskDetailController *controller.UserTaskDetailController
 }
 
 func NewUserHandler(database *repository.Database) *UserHandler {
 	userRepository := repository.NewUserRepository(database)
 	userController := controller.NewUserController(userRepository)
-	return &UserHandler{UserController: userController}
+	userTaskDetailRepository := repository.NewUserTaskDetailRepository(database)
+	userTaskDetailController := controller.NewUserTaskDetailController(userTaskDetailRepository)
+	return &UserHandler{UserController: userController, UserTaskDetailController: userTaskDetailController}
 }
 
 type success struct {
@@ -35,14 +37,14 @@ type success struct {
 
 func (h *UserHandler) users(router chi.Router) {
 	router.Get("/", h.getAllUsers)
-	router.Post("/change-password", changeUserPassword)
-	router.Get("/profile", profileUser)
+	router.Post("/change-password", h.changeUserPassword)
+	router.Get("/profile", h.profileUser)
 	router.Route("/{userID}", func(router chi.Router) {
 		router.Get("/", h.getUser)
-		router.Put("/", updateUser)
-		router.Patch("/update-role", updateRole)
-		router.Delete("/", deleteUser)
-		router.Post("/get-tasks", getAllTaskAssignedToUser)
+		router.Put("/", h.updateUser)
+		router.Patch("/update-role", h.updateRole)
+		router.Delete("/", h.deleteUser)
+		router.Post("/get-tasks", h.getAllTaskAssignedToUser)
 	})
 }
 
@@ -96,7 +98,7 @@ func (h *UserHandler) getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.UserController.GetUserByID(context.Background(), userID)
+	user, err := h.UserController.GetUserByID(userID, ctx)
 	if err != nil {
 		if err == repository.ErrNoMatch {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -116,14 +118,18 @@ func (h *UserHandler) getUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
-	userID, err := h.validateUserIDFromURLParam(r)
-	if err != nil {
-		render.Render(w, r, ErrBadRequest)
-		return
-	}
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err := h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	userID, err := h.validateUserIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrBadRequest)
 		return
 	}
 	err = h.UserController.DeleteUser(userID, ctx, r, tokenAuth, token)
@@ -143,8 +149,8 @@ func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func updateUser(w http.ResponseWriter, r *http.Request) {
-	userID, err := validateUserIDFromURLParam(r)
+func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
+	userID, err := h.validateUserIDFromURLParam(r)
 	if err != nil {
 		render.Render(w, r, ErrBadRequest)
 		return
@@ -163,9 +169,9 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 	}
-	user, err := dbInstance.UpdateUser(userID, userData, ctx)
+	user, err := h.UserController.UpdateUser(userID, userData, ctx)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -181,7 +187,11 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func updateRole(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) updateRole(w http.ResponseWriter, r *http.Request) {
+	err := h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
 	role := r.URL.Query().Get("role")
 	if role == "" {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid role")))
@@ -192,14 +202,14 @@ func updateRole(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("the role must be either 'manager' or 'user'")))
 		return
 	}
-	userID, err := validateUserIDFromURLParam(r)
+	userID, err := h.validateUserIDFromURLParam(r)
 	if err != nil {
 		render.Render(w, r, ErrBadRequest)
 		return
 	}
-	user, err := dbInstance.UpdateRole(userID, role, ctx)
+	user, err := h.UserController.UpdateRole(userID, role, ctx, r, tokenAuth)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -215,14 +225,26 @@ func updateRole(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func changeUserPassword(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) changeUserPassword(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
 	}
 	oldPassword := r.PostForm.Get("oldPassword")
 	newPassword := r.PostForm.Get("newPassword")
-	err = dbInstance.ChangeUserPassword(oldPassword, newPassword, ctx, r, tokenAuth)
+	token := GetToken(r, tokenAuth)
+
+	email, ok := token.Get("email")
+	if !ok {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("cannot get the email from token")))
+	}
+	// Convert email from interface{} to string
+	emailStr, ok := email.(string)
+	if !ok {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("cannot convert email from interface to string")))
+		return
+	}
+	err = h.UserController.ChangeUserPassword(oldPassword, newPassword, emailStr, ctx, r, tokenAuth)
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
@@ -238,7 +260,7 @@ func changeUserPassword(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func signup(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) signup(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
@@ -255,13 +277,13 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate email
-	if !db.IsValidEmail(user.Email) {
+	if !h.isValidEmail(user.Email) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("your email is not valid, please provide a valid email")))
 		return
 	}
 	// Validate password
 	// The password must contain at least 6 characters
-	if !db.IsValidPassword(user.Password) {
+	if !h.isValidPassword(user.Password) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("your password is not valid, please provide a password that contains at least 6 characters")))
 		return
 	}
@@ -278,7 +300,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 		Value: token,
 	})
 	r = r.WithContext(ctx)
-	if err := dbInstance.AddUser(&user, ctx); err != nil {
+	if err := h.UserController.AddUser(&user, ctx); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -292,7 +314,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Sign up successful"))
 }
 
-func login(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) login(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, "Failed to parse form data.", http.StatusInternalServerError)
@@ -303,13 +325,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 	password := r.PostForm.Get("password")
 
 	// Validate email
-	if !db.IsValidEmail(email) {
+	if !h.isValidEmail(email) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("your email is not valid, please provide a valid email")))
 		return
 	}
 	// Validate password
 	// The password must contain at least 6 characters
-	if !db.IsValidPassword(password) {
+	if !h.isValidPassword(password) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("your password is not valid, please provide a valid password that contains at least 6 characters")))
 		return
 	}
@@ -317,7 +339,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	token := MakeToken(email, password)
 
 	// Check if the email and password are valid
-	ok, err := dbInstance.CompareEmailAndPassword(email, password, ctx, r, tokenAuth)
+	ok, err := h.UserController.CompareEmailAndPassword(email, password, ctx)
 	if !ok {
 		render.Render(w, r, ErrorRenderer(err))
 		return
@@ -337,7 +359,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`Login successful, your email is: %s`, email)))
 }
 
-func logout(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		HttpOnly: true,
 		MaxAge:   -1, // Delete the cookie.
@@ -350,7 +372,7 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`Logout successful`))
 }
 
-func profileUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) profileUser(w http.ResponseWriter, r *http.Request) {
 	token := GetToken(r, tokenAuth)
 	if token == nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
@@ -358,9 +380,9 @@ func profileUser(w http.ResponseWriter, r *http.Request) {
 	}
 	userEmail, _ := token.Get("email")
 
-	user, err := dbInstance.GetUserByEmail(userEmail.(string), ctx)
+	user, err := h.UserController.GetUserByEmail(userEmail.(string), ctx)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
@@ -375,4 +397,25 @@ func profileUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonBytes)
 
+}
+
+// Validates that an email address is in a valid format
+func (h *UserHandler) isValidEmail(email string) bool {
+	if email == "" {
+		return false
+	}
+	// Define a regular expression for validating email addresses
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+	// Use the MatchString method to check if the email address matches the regular expression
+	return emailRegex.MatchString(email)
+}
+
+// Validates that a password meets the minimum requirements
+func (h *UserHandler) isValidPassword(password string) bool {
+	if password == "" {
+		return false
+	}
+	// Check if the password is at least 6 characters long
+	return len(password) >= 6
 }

@@ -7,14 +7,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/qthuy2k1/task-management-app/db"
+	"github.com/qthuy2k1/task-management-app/internal/repository"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/jwtauth/v5"
 )
 
 var tokenAuth *jwtauth.JWTAuth
-var dbInstance db.Database
 
 const Secret = "<my-secret-key-1010>"
 
@@ -24,14 +23,15 @@ func init() {
 
 var ctx = context.Background()
 
-func NewHandler(db db.Database) http.Handler {
+func NewHandler(db *repository.Database) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
 	r.MethodNotAllowed(methodNotAllowedHandler)
 	r.NotFound(notFoundHandler)
-	dbInstance = db
-
+	userHandler := NewUserHandler(db)
+	taskHandler := NewTaskHandler(db)
+	taskCategoryHandler := NewTaskCategoryHandler(db)
 	// protected routes
 	r.Group(func(r chi.Router) {
 		/*
@@ -46,18 +46,17 @@ func NewHandler(db db.Database) http.Handler {
 		r.Use(jwtauth.Verifier(tokenAuth))
 		// send 401 Unauthorized response for any unverified
 		r.Use(jwtauth.Authenticator)
-
-		r.Route("/users", users)
-		r.Route("/task-categories", taskCategories)
-		r.Route("/tasks", tasks)
+		r.Route("/users", userHandler.users)
+		r.Route("/task-categories", taskCategoryHandler.taskCategories)
+		r.Route("/tasks", taskHandler.tasks)
 	})
 
 	// public routes
 	r.Group(func(r chi.Router) {
 		r.Get("/", welcome)
-		r.Post("/signup", signup)
-		r.Post("/login", login)
-		r.Post("/logout", logout)
+		r.Post("/signup", userHandler.signup)
+		r.Post("/login", userHandler.login)
+		r.Post("/logout", userHandler.logout)
 	})
 	return r
 }

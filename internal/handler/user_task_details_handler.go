@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/db"
+	"github.com/qthuy2k1/task-management-app/internal/repository"
 )
 
 var userTaskDetailIDKey = "userTaskDetailID"
@@ -30,7 +30,7 @@ func UserTaskDetailContext(next http.Handler) http.Handler {
 	})
 }
 
-func createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
+func (h *TaskHandler) createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
@@ -52,7 +52,13 @@ func createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	if err = dbInstance.AddUserToTask(userID, taskID, ctx, r, tokenAuth, token); err != nil {
+	err = h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+
+	if err = h.UserTaskDetailController.AddUserToTask(userID, taskID, ctx); err != nil {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
@@ -66,7 +72,7 @@ func createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write(jsonBytes)
 }
-func deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
+func (h *TaskHandler) deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
@@ -87,9 +93,10 @@ func deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
 		return
 	}
-	err = dbInstance.DeleteUserFromTask(userID, taskID, ctx, r, tokenAuth, token)
+
+	err = h.UserTaskDetailController.DeleteUserFromTask(userID, taskID, ctx)
 	if err != nil {
-		if err == db.ErrNoMatch {
+		if err == repository.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -107,13 +114,13 @@ func deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func getAllUserAsignnedToTask(w http.ResponseWriter, r *http.Request) {
+func (h *TaskHandler) getAllUserAsignnedToTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := strconv.Atoi(chi.URLParam(r, "taskID"))
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task id")))
 		return
 	}
-	users, err := dbInstance.GetAllUsersAssignedToTask(taskID)
+	users, err := h.UserTaskDetailController.GetAllUsersAssignedToTask(taskID)
 	if err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
@@ -127,13 +134,13 @@ func getAllUserAsignnedToTask(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-func getAllTaskAssignedToUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) getAllTaskAssignedToUser(w http.ResponseWriter, r *http.Request) {
 	userID, err := strconv.Atoi(chi.URLParam(r, "userID"))
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid user id")))
 		return
 	}
-	tasks, err := dbInstance.GetAllTaskAssignedToUser(userID)
+	tasks, err := h.UserTaskDetailController.GetAllTaskAssignedToUser(userID)
 	if err != nil {
 		render.Render(w, r, ServerErrorRenderer(err))
 		return

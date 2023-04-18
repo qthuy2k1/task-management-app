@@ -17,8 +17,8 @@ type Database struct {
 
 const PORT = 5432
 
-func Initialize(dbUrl string) (Database, error) {
-	db := Database{}
+func Initialize(dbUrl string) (*Database, error) {
+	db := &Database{}
 	dsn := dbUrl
 	conn, err := sql.Open("postgres", dsn)
 	if err != nil {
