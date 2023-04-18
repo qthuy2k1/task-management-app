@@ -33,7 +33,7 @@ func NewTaskCategoryHandler(database *repository.Database) *TaskCategoryHandler 
 func (h *TaskCategoryHandler) taskCategories(router chi.Router) {
 	router.Get("/", h.getAllTaskCategories)
 	router.Post("/", h.createTaskCategory)
-	// router.Post("/csv", importTaskCategoryCSV)
+	router.Post("/csv", h.importTaskCategoryCSV)
 	router.Route("/{taskCategoryID}", func(router chi.Router) {
 		router.Get("/", h.getTaskCategory)
 		router.Put("/", h.updateTaskCategory)
@@ -238,26 +238,36 @@ func (h *TaskCategoryHandler) updateTaskCategory(w http.ResponseWriter, r *http.
 
 }
 
-// func importTaskCategoryCSV(w http.ResponseWriter, r *http.Request) {
-// 	err := r.ParseForm()
-// 	if err != nil {
-// 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
-// 	}
-// 	path := r.PostForm.Get("path")
-// 	taskCategoryList, err := dbInstance.ImportTaskCategoryDataFromCSV(path)
-// 	if err != nil {
-// 		render.Render(w, r, ErrorRenderer(err))
-// 	}
-// 	token := GetToken(r, tokenAuth)
+func (h *TaskCategoryHandler) importTaskCategoryCSV(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+	}
+	path := r.PostForm.Get("path")
+	taskCategoryList, err := h.TaskCategoryController.ImportTaskCategoryDataFromCSV(path)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err = h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	for _, taskCategory := range taskCategoryList {
+		if err := h.TaskCategoryController.AddTaskCategory(&taskCategory, ctx); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+	}
+	jsonBytes, err := json.Marshal(taskCategoryList)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 
-// 	for _, taskCategory := range taskCategoryList.TaskCategories {
-// 		if err := dbInstance.AddTaskCategory(&taskCategory, r, tokenAuth, token); err != nil {
-// 			render.Render(w, r, ErrorRenderer(err))
-// 			return
-// 		}
-// 	}
-// 	if err := render.Render(w, r, &taskCategoryList); err != nil {
-// 		render.Render(w, r, ErrorRenderer(err))
-// 		return
-// 	}
-// }
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
+}

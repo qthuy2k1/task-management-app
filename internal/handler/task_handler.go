@@ -36,7 +36,7 @@ func NewTaskHandler(database *repository.Database) *TaskHandler {
 func (h *TaskHandler) tasks(router chi.Router) {
 	router.Get("/", h.getAllTasks)
 	router.Post("/", h.createTask)
-	// router.Post("/csv", importTaskCSV)
+	router.Post("/csv", h.importTaskCSV)
 	router.Route("/{taskID}", func(router chi.Router) {
 		router.Get("/", h.getTask)
 		router.Put("/", h.updateTask)
@@ -315,30 +315,42 @@ func (h *TaskHandler) unLockTask(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
-// func importTaskCSV(w http.ResponseWriter, r *http.Request) {
-// 	err := r.ParseForm()
-// 	if err != nil {
-// 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
-// 	}
-// 	path := r.PostForm.Get("path")
-// 	taskList, err := dbInstance.ImportTaskDataFromCSV(path)
-// 	if err != nil {
-// 		render.Render(w, r, ErrorRenderer(err))
-// 		return
-// 	}
-// 	token := GetToken(r, tokenAuth)
-// 	for _, task := range taskList.Tasks {
-// 		if err := dbInstance.AddTask(&task, r, tokenAuth, token); err != nil {
-// 			render.Render(w, r, ErrorRenderer(err))
-// 			return
-// 		}
-// 		if err = dbInstance.AddUserToTask(task.AuthorID, task.ID, r, tokenAuth, token); err != nil {
-// 			render.Render(w, r, ErrorRenderer(err))
-// 			return
-// 		}
-// 	}
-// 	if err := render.Render(w, r, &taskList); err != nil {
-// 		render.Render(w, r, ErrorRenderer(err))
-// 		return
-// 	}
-// }
+func (h *TaskHandler) importTaskCSV(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+	}
+	path := r.PostForm.Get("path")
+	taskList, err := h.TaskController.ImportTaskDataFromCSV(path)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	err = h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	for _, task := range taskList {
+		if err := h.TaskController.AddTask(&task, ctx); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+		if err = h.UserTaskDetailController.AddUserToTask(task.AuthorID, task.ID, ctx); err != nil {
+			render.Render(w, r, ErrorRenderer(err))
+			return
+		}
+	}
+
+	jsonBytes, err := json.Marshal(taskList)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
+}
