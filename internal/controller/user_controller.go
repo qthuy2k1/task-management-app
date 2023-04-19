@@ -65,7 +65,7 @@ func (c *UserController) DeleteUser(userID int, ctx context.Context, r *http.Req
 		return err
 	}
 	if rowsAff == 0 {
-		return errors.New("No row affected")
+		return errors.New("no row affected")
 	}
 	return nil
 }
