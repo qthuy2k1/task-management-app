@@ -88,5 +88,5 @@ func GetToken(r *http.Request, tokenAuth *jwtauth.JWTAuth) jwt.Token {
 }
 
 func welcome(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Welcome anonymous 123213123123"))
+	w.Write([]byte("Welcome anonymous"))
 }
