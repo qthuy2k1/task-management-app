@@ -41,6 +41,9 @@ func (re *UserTaskDetailRepository) DeleteUserFromTask(userID int, taskID int) e
 
 	_, err = stmt.Exec(userID, taskID)
 	if err != nil {
+		if err == ErrNoMatch {
+			return ErrNoMatch
+		}
 		return err
 	}
 	return nil
