@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -19,7 +18,6 @@ func NewUserRepository(database *Database) *UserRepository {
 
 // Retrieves all users from the database
 func (re *UserRepository) GetAllUsers(ctx context.Context) (models.UserSlice, error) {
-	fmt.Println("123123j123h1323-912-0321-3sdjf-0----------------------")
 	users, err := models.Users().All(ctx, re.Database.Conn)
 	if err != nil {
 		return users, err
