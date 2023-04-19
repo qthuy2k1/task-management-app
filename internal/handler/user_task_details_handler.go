@@ -30,7 +30,7 @@ func UserTaskDetailContext(next http.Handler) http.Handler {
 	})
 }
 
-func (h *TaskHandler) createUserTaskDetail(w http.ResponseWriter, r *http.Request) {
+func (h *TaskHandler) addUserTaskDetail(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))

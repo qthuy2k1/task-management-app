@@ -32,7 +32,7 @@ func NewTaskCategoryHandler(database *repository.Database) *TaskCategoryHandler 
 
 func (h *TaskCategoryHandler) taskCategories(router chi.Router) {
 	router.Get("/", h.getAllTaskCategories)
-	router.Post("/", h.createTaskCategory)
+	router.Post("/", h.addTaskCategory)
 	router.Post("/csv", h.importTaskCategoryCSV)
 	router.Route("/{taskCategoryID}", func(router chi.Router) {
 		router.Get("/", h.getTaskCategory)
@@ -68,7 +68,7 @@ func (h *TaskCategoryHandler) validateTaskCategoryIDFromURLParam(r *http.Request
 
 }
 
-func (h *TaskCategoryHandler) createTaskCategory(w http.ResponseWriter, r *http.Request) {
+func (h *TaskCategoryHandler) addTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategory := &models.TaskCategory{}
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {

@@ -35,7 +35,7 @@ func NewTaskHandler(database *repository.Database) *TaskHandler {
 
 func (h *TaskHandler) tasks(router chi.Router) {
 	router.Get("/", h.getAllTasks)
-	router.Post("/", h.createTask)
+	router.Post("/", h.addTask)
 	router.Post("/csv", h.importTaskCSV)
 	router.Route("/{taskID}", func(router chi.Router) {
 		router.Get("/", h.getTask)
@@ -43,7 +43,7 @@ func (h *TaskHandler) tasks(router chi.Router) {
 		router.Delete("/", h.deleteTask)
 		router.Patch("/lock", h.lockTask)
 		router.Patch("/unlock", h.unLockTask)
-		router.Post("/add-user", h.createUserTaskDetail)
+		router.Post("/add-user", h.addUserTaskDetail)
 		router.Post("/delete-user", h.deleteUserFromTask)
 		router.Get("/get-users", h.getAllUserAsignnedToTask)
 	})
@@ -77,7 +77,7 @@ func (h *TaskHandler) validateTaskIDFromURLParam(r *http.Request) (int, error) {
 
 }
 
-func (h *TaskHandler) createTask(w http.ResponseWriter, r *http.Request) {
+func (h *TaskHandler) addTask(w http.ResponseWriter, r *http.Request) {
 	task := models.Task{}
 	// Read request body into a []byte variable
 	body, err := ioutil.ReadAll(r.Body)
