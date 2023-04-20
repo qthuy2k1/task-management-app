@@ -7,9 +7,20 @@ This is a simple API-based task management application that was created as part 
 * Authenticated users can access all tasks as well as edit their assigned tasks and also edit their information.
 * Users who have the role of 'manager' are able to access all features within the app.
 ### Start the project guide
-* Clone this repository
-* To install all dependencies, run the command <code>docker-compose up</code>. If you have installed Makefile, you can simply run the <code>make</code> command.
-* Create an .env file in your project root folder and add your variables. See .env.sample for assistance.
+1. Clone this repository
+    ```sh
+    git clone https://github.com/qthuy2k1/task-management-app.git
+    ```
+2. Create an .env file in your project root folder and add your variables. See .env.sample for assistance.
+
+3. Start the project and get all dependencies
+    ```sh 
+    docker-compose up
+    ``` 
+    If you have installed Makefile, you can simply run the <code>make</code> command.
+    ```sh
+    make
+    ```
 ### API Endpoints
 | HTTP Verbs | Endpoints | Action |
 | --- | --- | --- |
