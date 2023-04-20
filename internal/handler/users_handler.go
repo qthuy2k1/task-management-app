@@ -39,6 +39,7 @@ func (h *UserHandler) users(router chi.Router) {
 	router.Get("/", h.getAllUsers)
 	router.Post("/change-password", h.changeUserPassword)
 	router.Get("/profile", h.profileUser)
+	router.Get("/managers", h.getUsersManager)
 	router.Route("/{userID}", func(router chi.Router) {
 		router.Get("/", h.getUser)
 		router.Put("/", h.updateUser)
@@ -418,4 +419,23 @@ func (h *UserHandler) isValidPassword(password string) bool {
 	}
 	// Check if the password is at least 6 characters long
 	return len(password) >= 6
+}
+
+func (h *UserHandler) getUsersManager(w http.ResponseWriter, r *http.Request) {
+	err := h.UserController.IsManager(ctx, r, tokenAuth)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	users, err := h.UserController.GetUsersManager(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonBytes, err := json.Marshal(users)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }

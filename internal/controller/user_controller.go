@@ -171,3 +171,11 @@ func (c *UserController) ChangeUserPassword(oldPassword, newPassword, email stri
 	}
 	return nil
 }
+
+func (c *UserController) GetUsersManager(ctx context.Context) (models.UserSlice, error) {
+	users, err := c.UserRepository.GetUsersManager(ctx)
+	if err != nil {
+		return users, err
+	}
+	return users, err
+}

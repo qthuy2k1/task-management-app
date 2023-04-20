@@ -47,3 +47,8 @@ func (m *MockUserService) UpdateRole(userID int, role string, ctx context.Contex
 	args := m.Called(userID, role, ctx)
 	return args.Get(0).(*models.User), args.Error(1)
 }
+
+func (m *MockUserService) GetUsersManager(ctx context.Context) (models.UserSlice, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(models.UserSlice), args.Error(1)
+}

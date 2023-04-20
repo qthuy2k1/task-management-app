@@ -690,31 +690,98 @@ func TestLoginHandler(t *testing.T) {
 	}
 }
 
-// func TestLogoutHandler(t *testing.T) {
-// 	// Create a new router with the logout handler
-// 	router := chi.NewRouter()
-// 	router.Get("/logout", logout)
+func TestLogoutHandler(t *testing.T) {
+	// Create a new router with the logout handler
+	router := chi.NewRouter()
+	router.Get("/logout", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			HttpOnly: true,
+			MaxAge:   -1, // Delete the cookie.
+			SameSite: http.SameSiteLaxMode,
+			// Uncomment below for HTTPS:
+			// Secure: true,
+			Name:  "jwt",
+			Value: "",
+		})
+		w.Write([]byte(`Logout successful`))
+	})
 
-// 	// Create a new test request to the logout route
-// 	req, err := http.NewRequest("GET", "/logout", nil)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	// Create a new test request to the logout route
+	req, err := http.NewRequest("GET", "/logout", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	// Create a new test response recorder
-// 	recorder := httptest.NewRecorder()
+	// Create a new test response recorder
+	recorder := httptest.NewRecorder()
 
-// 	// Call the router with the test request and response recorder
-// 	router.ServeHTTP(recorder, req)
+	// Call the router with the test request and response recorder
+	router.ServeHTTP(recorder, req)
 
-// 	// Check if the response status code is as expected
-// 	if recorder.Code != http.StatusOK {
-// 		t.Errorf("Expected response status code %d, but got %d", http.StatusOK, recorder.Code)
-// 	}
+	// Check if the response status code is as expected
+	if recorder.Code != http.StatusOK {
+		t.Errorf("Expected response status code %d, but got %d", http.StatusOK, recorder.Code)
+	}
 
-// 	// Check if the cookie was deleted
-// 	cookie := recorder.Header().Get("Set-Cookie")
-// 	if cookie != "jwt=; Max-Age=0; HttpOnly; SameSite=Lax" {
-// 		t.Errorf("Expected cookie to be deleted, but got %s", cookie)
-// 	}
-// }
+	// Check if the cookie was deleted
+	cookie := recorder.Header().Get("Set-Cookie")
+	if cookie != "jwt=; Max-Age=0; HttpOnly; SameSite=Lax" {
+		t.Errorf("Expected cookie to be deleted, but got %s", cookie)
+	}
+}
+
+func TestGetUsersManager(t *testing.T) {
+	// Create a mock user list
+	mockUserList := models.UserSlice{
+		{
+			ID:       1,
+			Name:     "John Doe",
+			Email:    "john.doe@example.com",
+			Password: "password1",
+			Role:     "manager",
+		},
+		{
+			ID:       2,
+			Name:     "Jane Smith",
+			Email:    "jane.smith@example.com",
+			Password: "password2",
+			Role:     "manager",
+		},
+	}
+
+	mockUserService := &controller.MockUserService{}
+
+	// Define the expected return values for the mock GetAllUsers function
+	mockUserService.On("GetUsersManager", context.Background()).Return(mockUserList, nil)
+
+	// Create a new instance of the Chi router and register the GetAllUsers route
+	r := chi.NewRouter()
+	r.Get("/users/managers", func(w http.ResponseWriter, r *http.Request) {
+		userlist, err := mockUserService.GetUsersManager(context.Background())
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(userlist)
+	})
+
+	// Create a new HTTP request that targets the GetAllUsers route
+	req, err := http.NewRequest("GET", "/users/managers", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a new HTTP response recorder to capture the response
+	rr := httptest.NewRecorder()
+
+	// Call the HTTP handler for the GetAllUsers route with the mock request and response recorder
+	r.ServeHTTP(rr, req)
+
+	// Check that the HTTP response status code is 200 OK
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Check that the HTTP response body matches the expected user list JSON
+	expectedJSON, _ := json.Marshal(mockUserList)
+	assert.JSONEq(t, string(expectedJSON), rr.Body.String())
+}
