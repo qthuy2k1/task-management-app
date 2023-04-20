@@ -23,89 +23,130 @@ import (
 )
 
 func TestGetAllTasks(t *testing.T) {
-	// Create a new mock task service
-	taskServiceMock := &controller.MockTaskService{}
-
-	r := chi.NewRouter()
-
-	// Set up the mock task service to return a list of tasks
-	taskList := models.TaskSlice{
+	testCases := []struct {
+		name           string
+		pageNumber     int
+		pageSize       int
+		sortField      string
+		sortOrder      string
+		expectedStatus int
+		expectedBody   string
+		mockResults    models.TaskSlice
+		mockError      error
+	}{
 		{
-			ID:             1,
-			Name:           "Task 1",
-			Description:    "Description of Task 1",
-			StartDate:      time.Now(),
-			EndDate:        time.Now().Add(time.Hour * 24),
-			Status:         null.NewString("In Progress", true),
-			AuthorID:       1,
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
-			TaskCategoryID: 1,
+			name:           "Returns list of tasks",
+			pageNumber:     2,
+			pageSize:       1,
+			sortField:      "id",
+			sortOrder:      "asc",
+			expectedStatus: http.StatusOK,
+			expectedBody:   `[{"id":1,"name":"Task 1","description":"Description of Task 1","start_date":"2023-04-20T13:00:00Z","end_date":"2023-04-21T13:00:00Z","status":"In Progress","author_id":1,"created_at":"2023-04-20T13:00:00Z","updated_at":"2023-04-20T13:00:00Z","task_category_id":1}]`,
+			mockResults: models.TaskSlice{
+				{
+					ID:             1,
+					Name:           "Task 1",
+					Description:    "Description of Task 1",
+					StartDate:      time.Date(2023, 4, 20, 13, 0, 0, 0, time.UTC),
+					EndDate:        time.Date(2023, 4, 21, 13, 0, 0, 0, time.UTC),
+					Status:         null.NewString("In Progress", true),
+					AuthorID:       1,
+					CreatedAt:      time.Date(2023, 4, 20, 13, 0, 0, 0, time.UTC),
+					UpdatedAt:      time.Date(2023, 4, 20, 13, 0, 0, 0, time.UTC),
+					TaskCategoryID: 1,
+				},
+			},
+			mockError: nil,
 		},
 		{
-			ID:             2,
-			Name:           "Task 2",
-			Description:    "Description of Task 2",
-			StartDate:      time.Now(),
-			EndDate:        time.Now().Add(time.Hour * 24),
-			Status:         null.NewString("In Progress", true),
-			AuthorID:       1,
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
-			TaskCategoryID: 2,
+			name:           "Returns error when GetAllTasks fails",
+			pageNumber:     1,
+			pageSize:       2,
+			sortField:      "name",
+			sortOrder:      "desc",
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   "mock error",
+			mockResults:    nil,
+			mockError:      errors.New("mock error"),
 		},
 	}
-	taskServiceMock.On("GetAllTasks", context.Background()).Return(taskList, nil)
 
-	// Create a new test request
-	req, err := http.NewRequest("GET", "/tasks", nil)
-	if err != nil {
-		t.Fatal(err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Create a new mock task service
+			taskServiceMock := &controller.MockTaskService{}
+
+			// Set up the mock task service to return a list of tasks
+			taskServiceMock.On("GetAllTasks", mock.Anything, testCase.pageNumber, testCase.pageSize, testCase.sortField, testCase.sortOrder).Return(testCase.mockResults, testCase.mockError)
+
+			// Create a new test request with pagination parameters
+			req, err := http.NewRequest("GET", fmt.Sprintf("/tasks?page=%d&size=%d&sortfield=%s&sortorder=%s", testCase.pageNumber, testCase.pageSize, testCase.sortField, testCase.sortOrder), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create a new test response recorder
+			rr := httptest.NewRecorder()
+
+			// Call the getAllTasks function with the mock task service and the test request
+			r := chi.NewRouter()
+			r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
+				pageNumber := 1
+				pageSize := 2
+				sortField := "id"
+				sortOrder := "asc"
+
+				// Retrieve the "page" query parameter from the request, if present
+				if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+					pageNumber, _ = strconv.Atoi(pageStr)
+				}
+
+				// Retrieve the "size" query parameter from the request, if present
+				if sizeStr := r.URL.Query().Get("size"); sizeStr != "" {
+					pageSize, _ = strconv.Atoi(sizeStr)
+				}
+
+				// Retrieve the "sort" query parameter from the request, if present
+				if sortFieldStr := r.URL.Query().Get("sortfield"); sortFieldStr != "" {
+					sortField = sortFieldStr
+				}
+				if sortOrderStr := r.URL.Query().Get("sortorder"); sortOrderStr != "" {
+					sortOrder = sortOrderStr
+				}
+
+				tasks, err := taskServiceMock.GetAllTasks(ctx, pageNumber, pageSize, sortField, sortOrder)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				jsonBytes, err := json.Marshal(tasks)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(jsonBytes)
+			})
+
+			r.ServeHTTP(rr, req)
+
+			// Assert that the response status code is as expected
+			if status := rr.Code; status != testCase.expectedStatus {
+				t.Errorf("Handler returned wrong status code: got %v want %v", status, testCase.expectedStatus)
+			}
+
+			// Assert that the response body matches the expected task list or error message
+			response := strings.TrimRight(rr.Body.String(), "\n\t\r")
+			if response != testCase.expectedBody {
+				t.Errorf("Handler returned unexpected body: got %s want %s", response, testCase.expectedBody)
+			}
+
+			// Assert that the GetAllTasks method was called on the mock task service with the correct arguments
+			taskServiceMock.AssertExpectations(t)
+		})
 	}
-
-	// Set up the request context with a valid JWT token
-
-	// Create a new test response recorder
-	rr := httptest.NewRecorder()
-
-	// Call the getAllTasks function with the mock task service and the test request
-	r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
-		// Get the JWT token from the request header
-		if err != nil {
-			return
-		}
-		if err != nil {
-			http.Error(w, "Invalid JWT token", http.StatusBadRequest)
-			return
-		}
-
-		// Call the task service to get the list of tasks
-		taskList, err := taskServiceMock.GetAllTasks(context.Background())
-		if err != nil {
-			http.Error(w, "Error retrieving tasks", http.StatusInternalServerError)
-			return
-		}
-
-		// Render the task list as JSON and send it as the response body
-		render.JSON(w, r, taskList)
-	})
-
-	r.ServeHTTP(rr, req)
-
-	// Assert that the response status code is 200 OK
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-
-	// Assert that the response body matches the expected task list
-	expectedBody, _ := json.Marshal(taskList)
-	response := strings.TrimRight(rr.Body.String(), "\n\t\r")
-	if response != string(expectedBody) {
-		t.Errorf("Handler returned unexpected body: got %q want %q", response, expectedBody)
-	}
-
-	// Assert that the GetAllTasks method was called on the mock task service with the correct arguments
-	taskServiceMock.AssertCalled(t, "GetAllTasks", mock.Anything, mock.Anything)
 }
 
 func TestGetTaskByID(t *testing.T) {

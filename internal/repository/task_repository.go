@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -27,14 +28,35 @@ const (
 	Lock       TaskStatus = "Lock"
 )
 
-func (re *TaskRepository) GetAllTasks(ctx context.Context) (models.TaskSlice, error) {
-	tasks, err := models.Tasks().All(ctx, re.Database.Conn)
+func (re *TaskRepository) GetAllTasks(ctx context.Context, pageNumber int, pageSize int, sortField string, sortOrder string) (models.TaskSlice, error) {
+	fmt.Println(sortField)
+	queryMods := []QueryMod{
+		OrderBy(fmt.Sprintf(sortField + " " + sortOrder)),
+		Offset((pageNumber - 1) * pageSize),
+		Limit(pageSize),
+	}
+	// rows, err := models.Tasks(OrderBy("? ?", sortField, sortOrder), Limit(pageSize), Offset((pageNumber-1)*pageSize)).All(ctx, re.Database.Conn)
+	rows, err := models.Tasks(queryMods...).All(ctx, re.Database.Conn)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return tasks, ErrNoMatch
+			return nil, ErrNoMatch
 		}
-		return tasks, err
+		return nil, err
 	}
+
+	tasks := make(models.TaskSlice, 0)
+	for _, x := range rows {
+		// var task *models.Task
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, x)
+	}
+
+	// if err := rows.Err(); err != nil {
+	//     return nil, err
+	// }
+
 	return tasks, nil
 }
 

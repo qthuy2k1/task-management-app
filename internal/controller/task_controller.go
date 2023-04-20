@@ -23,8 +23,8 @@ func NewTaskController(taskRepository *repository.TaskRepository) *TaskControlle
 	return &TaskController{TaskRepository: taskRepository}
 }
 
-func (c *TaskController) GetAllTasks(ctx context.Context) (models.TaskSlice, error) {
-	tasks, err := c.TaskRepository.GetAllTasks(ctx)
+func (c *TaskController) GetAllTasks(ctx context.Context, pageNumber int, pageSize int, sortField string, sortOrder string) (models.TaskSlice, error) {
+	tasks, err := c.TaskRepository.GetAllTasks(ctx, pageNumber, pageSize, sortField, sortOrder)
 	if err != nil {
 		return tasks, err
 	}

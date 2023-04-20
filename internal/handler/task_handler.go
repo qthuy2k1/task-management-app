@@ -121,15 +121,39 @@ func (h *TaskHandler) addTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) getAllTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.TaskController.GetAllTasks(ctx)
+	pageNumber := 1
+	pageSize := 2
+	sortField := "id"
+	sortOrder := "asc"
 
+	// Retrieve the "page" query parameter from the request, if present
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		pageNumber, _ = strconv.Atoi(pageStr)
+	}
+
+	// Retrieve the "size" query parameter from the request, if present
+	if sizeStr := r.URL.Query().Get("size"); sizeStr != "" {
+		pageSize, _ = strconv.Atoi(sizeStr)
+	}
+
+	// Retrieve the "sort" query parameter from the request, if present
+	if sortFieldStr := r.URL.Query().Get("sortfield"); sortFieldStr != "" {
+		sortField = sortFieldStr
+	}
+	if sortOrderStr := r.URL.Query().Get("sortorder"); sortOrderStr != "" {
+		sortOrder = sortOrderStr
+	}
+
+	tasks, err := h.TaskController.GetAllTasks(ctx, pageNumber, pageSize, sortField, sortOrder)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	jsonBytes, err := json.Marshal(tasks)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -11,8 +11,8 @@ type MockTaskService struct {
 	mock.Mock
 }
 
-func (m *MockTaskService) GetAllTasks(ctx context.Context) (models.TaskSlice, error) {
-	args := m.Called(ctx)
+func (m *MockTaskService) GetAllTasks(ctx context.Context, pageNumber int, pageSize int, sortField string, sortOrder string) (models.TaskSlice, error) {
+	args := m.Called(ctx, pageNumber, pageSize, sortField, sortOrder)
 	return args.Get(0).(models.TaskSlice), args.Error(1)
 }
 func (m *MockTaskService) AddTask(task *models.Task, ctx context.Context) error {
