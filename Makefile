@@ -1,3 +1,6 @@
+run: 
+	docker-compose up
+
 postgres:
 	docker exec -it task-management-app-postgres-1 bash
 
@@ -7,4 +10,4 @@ migrate:
 sqlboiler:
 	docker run --rm -it -v C:/Users/thuy.nguyen/go/task-management-app/sqlboiler.toml:/sqlboiler.toml:ro -v C:/Users/thuy.nguyen/go/task-management-app/models:/models:rw --network task-management-app_new goodwithtech/sqlboiler:latest --wipe /sqlboiler-psql --output models/gen
 
-.PHONY: postgres migrate sqlboiler
+.PHONY: run postgres migrate sqlboiler
