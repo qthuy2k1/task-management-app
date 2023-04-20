@@ -81,3 +81,12 @@ func (re *UserRepository) IsManager(ctx context.Context, email string) (bool, er
 	}
 	return count > 0, nil
 }
+
+// Get all users who have the role of manager
+func (re *UserRepository) GetUsersManager(ctx context.Context) (models.UserSlice, error) {
+	users, err := models.Users(Where("role = ?", "manager")).All(ctx, re.Database.Conn)
+	if err != nil {
+		return users, err
+	}
+	return users, err
+}
