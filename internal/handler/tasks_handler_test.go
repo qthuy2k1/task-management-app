@@ -702,6 +702,111 @@ func TestUnLockTaskHandler(t *testing.T) {
 	}
 }
 
+func TestGetTaskCategoryOfTask(t *testing.T) {
+	// Define the mock task category service
+	taskServiceMock := &controller.MockTaskService{}
+
+	// Define the test cases
+	testCases := []struct {
+		name           string
+		taskID         int
+		mockTaskCat    *models.TaskCategory
+		mockErr        error
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "Success",
+			taskID:         1,
+			mockTaskCat:    &models.TaskCategory{ID: 1, Name: "Category 1"},
+			mockErr:        nil,
+			expectedStatus: http.StatusOK,
+			expectedBody:   `{"id":1,"name":"Category 1"}`,
+		},
+		{
+			name:           "Task Category Not Found",
+			taskID:         2,
+			mockTaskCat:    &models.TaskCategory{},
+			mockErr:        repository.ErrNoMatch,
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   `{"status_text":"","message":"Resource not found"}`,
+		},
+		{
+			name:           "Invalid Task ID",
+			taskID:         0,
+			mockTaskCat:    &models.TaskCategory{},
+			mockErr:        fmt.Errorf("invalid task ID"),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"status_text":"Bad request","message":"invalid task ID"}`,
+		},
+	}
+
+	// Loop through the test cases and run each one
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up the taskCategoryServiceMock to return the mock task category and error for this test case
+			taskServiceMock.On("GetTaskCategoryOfTask", tt.taskID, context.Background()).Return(tt.mockTaskCat, tt.mockErr)
+
+			// Create a new test request for GET /task-categories/{id}
+			req, err := http.NewRequest("GET", fmt.Sprintf("/tasks/%d/get-task-category", tt.taskID), nil)
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
+			// Create a new test response recorder
+			rr := httptest.NewRecorder()
+
+			// Create a new chi router and add a route handler for GET /task-categories/{id}
+			router := chi.NewRouter()
+			router.Get("/tasks/{taskID}/get-task-category", func(w http.ResponseWriter, r *http.Request) {
+				// Get the task category ID from the URL parameter
+				taskID := chi.URLParam(r, "taskID")
+
+				// Parse the task category ID as an integer
+				id, err := strconv.Atoi(taskID)
+				if err != nil {
+					render.Render(w, r, ErrorRenderer(err))
+					return
+				}
+
+				// Call the task category service to get the task category with the specified ID
+				taskCategory, err := taskServiceMock.GetTaskCategoryOfTask(id, context.Background())
+				if err != nil {
+					if err == repository.ErrNoMatch {
+						render.Render(w, r, ErrNotFound)
+					} else {
+						render.Render(w, r, ErrorRenderer(err))
+					}
+					return
+				}
+
+				// Render the task category as JSON and send it as the response body
+				jsonBytes, err := json.Marshal(taskCategory)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(jsonBytes)
+			})
+
+			// Call the test request handler with the mock task category service and the test request
+			router.ServeHTTP(rr, req)
+
+			// Check that the response status code matches the expected status code
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("Handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
+			}
+
+			// Check that the response body matches the expected body
+			response := strings.TrimRight(rr.Body.String(), "\n\t\r")
+			if response != tt.expectedBody {
+				t.Errorf("Handler returned unexpected body: got %q want %q", response, tt.expectedBody)
+			}
+		})
+	}
+}
+
 // func TestImportTaskCSV(t *testing.T) {
 // 	// Create a new router
 // 	r := chi.NewRouter()
@@ -731,24 +836,30 @@ func TestUnLockTaskHandler(t *testing.T) {
 
 // 		// Get the authentication token
 // 		token := GetToken(r, tokenAuth)
-
+// 		if token == nil {
+// 			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+// 			return
+// 		}
 // 		// Add each task to the database and assign it to the author
-// 		for _, task := range taskList.Tasks {
-// 			if err := mockTaskService.AddTask(&task, r, tokenAuth, token); err != nil {
+// 		for _, task := range taskList {
+// 			if err := mockTaskService.AddTask(&task, context.Background()); err != nil {
 // 				render.Render(w, r, ErrorRenderer(err))
 // 				return
 // 			}
-// 			if err = mockUserTaskDetailService.AddUserToTask(task.AuthorID, task.ID, r, tokenAuth, token); err != nil {
+// 			if err = mockUserTaskDetailService.AddUserToTask(task.AuthorID, task.ID, context.Background()); err != nil {
 // 				render.Render(w, r, ErrorRenderer(err))
 // 				return
 // 			}
 // 		}
 
 // 		// Render the task list as the response
-// 		if err := render.Render(w, r, &taskList); err != nil {
-// 			render.Render(w, r, ErrorRenderer(err))
-// 			return
+// 		jsonBytes, err := json.Marshal(taskList)
+// 		if err != nil {
+// 			http.Error(w, err.Error(), http.StatusInternalServerError)
 // 		}
+
+// 		w.Header().Set("Content-Type", "application/json")
+// 		w.Write(jsonBytes)
 // 	})
 
 // 	// Create a new test request with a path parameter
@@ -760,40 +871,38 @@ func TestUnLockTaskHandler(t *testing.T) {
 // 	rr := httptest.NewRecorder()
 
 // 	// Set up the expected task list returned by the mock task service
-// 	expectedTaskList := models.TaskList{
-// 		Tasks: []models.Task{
-// 			{
-// 				ID:             1,
-// 				Name:           "Task 1",
-// 				Description:    "Description for Task 1",
-// 				StartDate:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
-// 				EndDate:        time.Date(2022, 1, 31, 0, 0, 0, 0, time.UTC),
-// 				Status:         "In Progress",
-// 				AuthorID:       1,
-// 				CreatedAt:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
-// 				UpdatedAt:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
-// 				TaskCategoryID: 1,
-// 			},
-// 			{
-// 				ID:             2,
-// 				Name:           "Task 2",
-// 				Description:    "Description for Task 2",
-// 				StartDate:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
-// 				EndDate:        time.Date(2022, 2, 28, 0, 0, 0, 0, time.UTC),
-// 				Status:         "Completed",
-// 				AuthorID:       2,
-// 				CreatedAt:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
-// 				UpdatedAt:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
-// 				TaskCategoryID: 2,
-// 			},
+// 	expectedTaskList := []models.Task{
+// 		{
+// 			ID:             1,
+// 			Name:           "Task 1",
+// 			Description:    "Description for Task 1",
+// 			StartDate:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+// 			EndDate:        time.Date(2022, 1, 31, 0, 0, 0, 0, time.UTC),
+// 			Status:         null.NewString("In Progress", true),
+// 			AuthorID:       1,
+// 			CreatedAt:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+// 			UpdatedAt:      time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+// 			TaskCategoryID: 1,
+// 		},
+// 		{
+// 			ID:             2,
+// 			Name:           "Task 2",
+// 			Description:    "Description for Task 2",
+// 			StartDate:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
+// 			EndDate:        time.Date(2022, 2, 28, 0, 0, 0, 0, time.UTC),
+// 			Status:         null.NewString("Completed", true),
+// 			AuthorID:       2,
+// 			CreatedAt:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
+// 			UpdatedAt:      time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC),
+// 			TaskCategoryID: 2,
 // 		},
 // 	}
 
 // 	// Set up the expected calls to the mock task service
 // 	mockTaskService.On("ImportTaskDataFromCSV", "./data/task.csv").Return(expectedTaskList, nil)
 
-// 	mockTaskService.On("AddTask", &expectedTaskList.Tasks[0]).Return(nil)
-// 	mockTaskService.On("AddTask", &expectedTaskList.Tasks[1]).Return(nil)
+// 	mockTaskService.On("AddTask", &expectedTaskList[0]).Return(nil)
+// 	mockTaskService.On("AddTask", &expectedTaskList[1]).Return(nil)
 
 // 	mockTaskService.On("AddUserToTask", 1, 1).Return(nil)
 // 	mockTaskService.On("AddUserToTask", 2, 2).Return(nil)
@@ -806,7 +915,7 @@ func TestUnLockTaskHandler(t *testing.T) {
 // 	}
 
 // 	// Check the response body
-// 	var responseTaskList models.TaskList
+// 	var responseTaskList []models.Task
 // 	err := json.NewDecoder(rr.Body).Decode(&responseTaskList)
 // 	if err != nil {
 // 		t.Errorf("Error decoding response body: %s", err)

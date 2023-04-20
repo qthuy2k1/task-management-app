@@ -45,3 +45,11 @@ func (m *MockTaskService) ImportTaskDataFromCSV(path string) ([]models.Task, err
 	args := m.Called(path)
 	return args.Get(0).([]models.Task), args.Error(1)
 }
+func (m *MockTaskService) GetTaskCategoryOfTask(taskID int, ctx context.Context) (*models.TaskCategory, error) {
+	args := m.Called(taskID, ctx)
+	return args.Get(0).(*models.TaskCategory), args.Error(1)
+}
+func (m *MockTaskService) GetTasksByQueryName(name string, ctx context.Context) (models.TaskSlice, error) {
+	args := m.Called(name, ctx)
+	return args.Get(0).(models.TaskSlice), args.Error(1)
+}
