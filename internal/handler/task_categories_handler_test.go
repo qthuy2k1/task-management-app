@@ -456,7 +456,7 @@ func TestUpdateTaskCategoryHandler(t *testing.T) {
 	})
 
 	// Create a new test task category object
-	taskCategoryData := &models.TaskCategory{Name: "Test Task Category"}
+	taskCategoryData := models.TaskCategory{Name: "Test Task Category"}
 	taskCategoryDataJSON, _ := json.Marshal(taskCategoryData)
 	req, err := http.NewRequest("PUT", "/task-categories/1", bytes.NewReader(taskCategoryDataJSON))
 	if err != nil {
@@ -474,7 +474,7 @@ func TestUpdateTaskCategoryHandler(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	// Set up the mock task category service expectation
-	expectedTaskCategory := models.TaskCategory{ID: 1, Name: taskCategoryData.Name}
+	expectedTaskCategory := &models.TaskCategory{ID: 1, Name: taskCategoryData.Name}
 	taskCategoryServiceMock.On("UpdateTaskCategory", 1, taskCategoryData, context.Background()).Return(expectedTaskCategory, nil)
 
 	// Use the httptest package to send the test request to the router
