@@ -193,3 +193,19 @@ func (c *TaskController) ImportTaskDataFromCSV(path string) ([]models.Task, erro
 
 	return taskList, nil
 }
+
+func (c *TaskController) GetTaskCategoryOfTask(taskID int, ctx context.Context) (*models.TaskCategory, error) {
+	taskCategory, err := c.TaskRepository.GetTaskCategoryOfTask(taskID, ctx)
+	if err != nil {
+		return taskCategory, err
+	}
+	return taskCategory, err
+}
+
+func (c *TaskController) GetTasksByName(name string, ctx context.Context) (models.TaskSlice, error) {
+	tasks, err := c.TaskRepository.GetTasksByName(name, ctx)
+	if err != nil {
+		return tasks, err
+	}
+	return tasks, nil
+}

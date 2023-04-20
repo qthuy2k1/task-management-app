@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -29,6 +30,9 @@ const (
 func (re *TaskRepository) GetAllTasks(ctx context.Context) (models.TaskSlice, error) {
 	tasks, err := models.Tasks().All(ctx, re.Database.Conn)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return tasks, ErrNoMatch
+		}
 		return tasks, err
 	}
 	return tasks, nil
@@ -48,6 +52,9 @@ func (re *TaskRepository) GetTaskByID(taskID int, ctx context.Context) (*models.
 	task, err := models.Tasks(Where("id = ?", taskID)).One(ctx, re.Database.Conn)
 
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return task, ErrNoMatch
+		}
 		return task, err
 	}
 	return task, nil
@@ -100,4 +107,38 @@ func (re *TaskRepository) UnLockTask(taskID int, ctx context.Context) error {
 		return ErrNoMatch
 	}
 	return nil
+}
+
+// Get the task category of a task
+func (re *TaskRepository) GetTaskCategoryOfTask(taskID int, ctx context.Context) (*models.TaskCategory, error) {
+	task, err := models.Tasks(
+		Where("id = ?", taskID),
+	).One(ctx, re.Database.Conn)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrNoMatch
+		}
+		return nil, err
+	}
+
+	taskCategory, err := task.TaskCategory().One(ctx, re.Database.Conn)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return taskCategory, ErrNoMatch
+		}
+		return taskCategory, err
+	}
+	return taskCategory, nil
+}
+
+// Get tasks filter by name in query
+func (re *TaskRepository) GetTasksByName(name string, ctx context.Context) (models.TaskSlice, error) {
+	tasks, err := models.Tasks(Where("name LIKE ?", "%"+name+"%")).All(ctx, re.Database.Conn)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return tasks, ErrNoMatch
+		}
+		return tasks, err
+	}
+	return tasks, nil
 }

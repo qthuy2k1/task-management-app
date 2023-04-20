@@ -37,6 +37,7 @@ func (h *TaskHandler) tasks(router chi.Router) {
 	router.Get("/", h.getAllTasks)
 	router.Post("/", h.addTask)
 	router.Post("/csv", h.importTaskCSV)
+	router.Get("/filter-name", h.getTasksByName)
 	router.Route("/{taskID}", func(router chi.Router) {
 		router.Get("/", h.getTask)
 		router.Put("/", h.updateTask)
@@ -46,6 +47,7 @@ func (h *TaskHandler) tasks(router chi.Router) {
 		router.Post("/add-user", h.addUserTaskDetail)
 		router.Post("/delete-user", h.deleteUserFromTask)
 		router.Get("/get-users", h.getAllUserAsignnedToTask)
+		router.Get("/get-task-category", h.getTaskCategoryOfTask)
 	})
 }
 
@@ -348,7 +350,55 @@ func (h *TaskHandler) importTaskCSV(w http.ResponseWriter, r *http.Request) {
 
 	jsonBytes, err := json.Marshal(taskList)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		render.Render(w, r, ServerErrorRenderer(err))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
+}
+
+func (h *TaskHandler) getTaskCategoryOfTask(w http.ResponseWriter, r *http.Request) {
+	taskID, err := h.validateTaskIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+		return
+	}
+	taskCategory, err := h.TaskController.GetTaskCategoryOfTask(taskID, ctx)
+	if err != nil {
+		if err == repository.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ErrorRenderer(err))
+		}
+		return
+	}
+	jsonBytes, err := json.Marshal(taskCategory)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
+}
+
+func (h *TaskHandler) getTasksByName(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid role")))
+		return
+	}
+	tasks, err := h.TaskController.GetTasksByName(name, ctx)
+	if err != nil {
+		if err == repository.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ErrorRenderer(err))
+		}
+		return
+	}
+	jsonBytes, err := json.Marshal(tasks)
+	if err != nil {
+		render.Render(w, r, ServerErrorRenderer(err))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
