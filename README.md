@@ -1,6 +1,6 @@
 # Task Management Application
 ### Introduction
-This is a simple API-based task management application that was created as part of an internship assignment. The application is designed to allow users to create, view, update, and delete tasks, as well as manage task categories. The application was developed using the Go programming language and the Chi router library, and it uses a PostgreSQL database for data storage.
+This is a simple task management API that was created as part of an internship assignment. The application is designed to allow users to create, view, update, and delete tasks, as well as manage task categories. The application was developed using the Go programming language and the Chi router library, and it uses a PostgreSQL database for data storage.
 ### Project Support Features
 * Users can signup and login to their accounts
 * Public (non-authenticated) users can only access the homepage
@@ -40,7 +40,7 @@ This is a simple API-based task management application that was created as part 
 | PATCH | /users/{userID}/update-role | To update the role of an user account |
 | POST | /users/{userID}/get-tasks | To get all tasks that are assigned to a user |
 | | TASKS |
-| GET | /tasks/ | To retrieve all tasks |
+| GET | /tasks/ | To retrieve all tasks, and you can use query parameters to filter or sort the tasks |
 | POST | /tasks | To add a new task to the database |
 | POST | /tasks/csv | To import task data from a CSV file |
 | GET | /tasks/filter-name | To retrieve all tasks filtering by name |
