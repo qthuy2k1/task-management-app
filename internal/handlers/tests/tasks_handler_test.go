@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"bytes"
@@ -15,9 +15,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/handlers"
+	mockControllers "github.com/qthuy2k1/task-management-app/internal/mocks/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
 	"github.com/stretchr/testify/mock"
 	"github.com/volatiletech/null/v8"
 )
@@ -74,7 +75,7 @@ func TestGetAllTasks(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Create a new mock task service
-			taskServiceMock := &controller.MockTaskService{}
+			taskServiceMock := &mockControllers.MockTaskService{}
 
 			// Set up the mock task service to return a list of tasks
 			taskServiceMock.On("GetAllTasks", mock.Anything, testCase.pageNumber, testCase.pageSize, testCase.sortField, testCase.sortOrder).Return(testCase.mockResults, testCase.mockError)
@@ -114,7 +115,7 @@ func TestGetAllTasks(t *testing.T) {
 					sortOrder = sortOrderStr
 				}
 
-				tasks, err := taskServiceMock.GetAllTasks(ctx, pageNumber, pageSize, sortField, sortOrder)
+				tasks, err := taskServiceMock.GetAllTasks(context.Background(), pageNumber, pageSize, sortField, sortOrder)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -151,7 +152,7 @@ func TestGetAllTasks(t *testing.T) {
 
 func TestGetTaskByID(t *testing.T) {
 	// Define the mock task service
-	taskServiceMock := &controller.MockTaskService{}
+	taskServiceMock := &mockControllers.MockTaskService{}
 
 	// Define the test cases
 	testCases := []struct {
@@ -174,7 +175,7 @@ func TestGetTaskByID(t *testing.T) {
 			name:           "Task Not Found",
 			taskID:         2,
 			mockTask:       &models.Task{},
-			mockErr:        repository.ErrNoMatch,
+			mockErr:        repositories.ErrNoMatch,
 			expectedStatus: http.StatusNotFound,
 			expectedBody:   `{"status_text":"","message":"Resource not found"}`,
 		},
@@ -212,17 +213,17 @@ func TestGetTaskByID(t *testing.T) {
 				// Parse the task ID as an integer
 				id, err := strconv.Atoi(taskID)
 				if err != nil {
-					render.Render(w, r, ErrorRenderer(err))
+					render.Render(w, r, handlers.ErrorRenderer(err))
 					return
 				}
 
 				// Call the task service to get the task with the specified ID
-				task, err := taskServiceMock.GetTaskByID(id, ctx)
+				task, err := taskServiceMock.GetTaskByID(id, context.Background())
 				if err != nil {
-					if err == repository.ErrNoMatch {
-						render.Render(w, r, ErrNotFound)
+					if err == repositories.ErrNoMatch {
+						render.Render(w, r, handlers.ErrNotFound)
 					} else {
-						render.Render(w, r, ErrorRenderer(err))
+						render.Render(w, r, handlers.ErrorRenderer(err))
 					}
 					return
 				}
@@ -253,7 +254,7 @@ func TestGetTaskByID(t *testing.T) {
 }
 func TestAddTask(t *testing.T) {
 	// Create a new mock task service
-	taskServiceMock := &controller.MockTaskService{}
+	taskServiceMock := &mockControllers.MockTaskService{}
 
 	// Create a new test router
 	router := chi.NewRouter()
@@ -270,24 +271,24 @@ func TestAddTask(t *testing.T) {
 
 		tokenStr := strings.Split(r.Header.Get("Authorization"), " ")[1]
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		if token == nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		// Call the task service to add the new task
 		err = taskServiceMock.AddTask(&taskData, context.Background())
 		if err != nil {
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 
@@ -348,7 +349,7 @@ func TestAddTask(t *testing.T) {
 }
 func TestDeleteTask(t *testing.T) {
 	// Create a new mock task service
-	taskServiceMock := &controller.MockTaskService{}
+	taskServiceMock := &mockControllers.MockTaskService{}
 
 	// Create a new test router
 	router := chi.NewRouter()
@@ -358,34 +359,34 @@ func TestDeleteTask(t *testing.T) {
 		// Get the task ID from the URL parameters
 		taskID, err := strconv.Atoi(chi.URLParam(r, "taskID"))
 		if err != nil {
-			render.Render(w, r, ErrBadRequest)
+			render.Render(w, r, handlers.ErrBadRequest)
 			return
 		}
 
 		tokenStr := strings.Split(r.Header.Get("Authorization"), " ")[1]
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		if token == nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 
 		// Call the task service to delete the task
 		err = taskServiceMock.DeleteTask(taskID, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				render.Render(w, r, ErrNotFound)
+			if err == repositories.ErrNoMatch {
+				render.Render(w, r, handlers.ErrNotFound)
 			} else {
-				render.Render(w, r, ServerErrorRenderer(err))
+				render.Render(w, r, handlers.ServerErrorRenderer(err))
 			}
 			return
 		}
@@ -421,7 +422,7 @@ func TestDeleteTask(t *testing.T) {
 
 func TestUpdateTaskHandler(t *testing.T) {
 	// Create a new mock task service
-	taskServiceMock := &controller.MockTaskService{}
+	taskServiceMock := &mockControllers.MockTaskService{}
 
 	// Create a new router using Go chi
 	r := chi.NewRouter()
@@ -448,22 +449,22 @@ func TestUpdateTaskHandler(t *testing.T) {
 		}
 		tokenStr := r.Context().Value("token").(string)
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		fmt.Printf("Type of token: %T\n", token)
 		task, err := taskServiceMock.UpdateTask(taskID, taskData, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				render.Render(w, r, ErrorRenderer(fmt.Errorf("you are not the manager")))
+			if err == repositories.ErrNoMatch {
+				render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("you are not the manager")))
 			} else {
-				render.Render(w, r, ServerErrorRenderer(err))
+				render.Render(w, r, handlers.ServerErrorRenderer(err))
 			}
 			return
 		}
@@ -542,7 +543,7 @@ func TestUpdateTaskHandler(t *testing.T) {
 
 func TestLockTaskHandler(t *testing.T) {
 	// Create a new instance of the mock task service
-	mockTaskService := &controller.MockTaskService{}
+	mockTaskService := &mockControllers.MockTaskService{}
 
 	// Create a new router
 	r := chi.NewRouter()
@@ -556,25 +557,25 @@ func TestLockTaskHandler(t *testing.T) {
 		}
 		tokenStr := r.Context().Value("token").(string)
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if token == nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		err = mockTaskService.LockTask(taskID, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				render.Render(w, r, ErrNotFound)
+			if err == repositories.ErrNoMatch {
+				render.Render(w, r, handlers.ErrNotFound)
 			} else {
-				render.Render(w, r, ServerErrorRenderer(err))
+				render.Render(w, r, handlers.ServerErrorRenderer(err))
 			}
 			return
 		}
@@ -603,7 +604,7 @@ func TestLockTaskHandler(t *testing.T) {
 			name:           "Error - Task not found",
 			taskID:         2,
 			expectedStatus: http.StatusNotFound,
-			expectedError:  repository.ErrNoMatch,
+			expectedError:  repositories.ErrNoMatch,
 		},
 	}
 	// Create a new request with a test JWT token
@@ -642,7 +643,7 @@ func TestLockTaskHandler(t *testing.T) {
 }
 func TestUnLockTaskHandler(t *testing.T) {
 	// Create a new instance of the mock task service
-	mockTaskService := &controller.MockTaskService{}
+	mockTaskService := &mockControllers.MockTaskService{}
 
 	// Create a new router
 	r := chi.NewRouter()
@@ -656,25 +657,25 @@ func TestUnLockTaskHandler(t *testing.T) {
 		}
 		tokenStr := r.Context().Value("token").(string)
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		if token == nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		err = mockTaskService.UnLockTask(taskID, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				render.Render(w, r, ErrNotFound)
+			if err == repositories.ErrNoMatch {
+				render.Render(w, r, handlers.ErrNotFound)
 			} else {
-				render.Render(w, r, ServerErrorRenderer(err))
+				render.Render(w, r, handlers.ServerErrorRenderer(err))
 			}
 			return
 		}
@@ -705,7 +706,7 @@ func TestUnLockTaskHandler(t *testing.T) {
 			name:           "Error - Task not found",
 			taskID:         2,
 			expectedStatus: http.StatusNotFound,
-			expectedError:  repository.ErrNoMatch,
+			expectedError:  repositories.ErrNoMatch,
 		},
 	}
 	// Create a new request with a test JWT token
@@ -745,7 +746,7 @@ func TestUnLockTaskHandler(t *testing.T) {
 
 func TestGetTaskCategoryOfTask(t *testing.T) {
 	// Define the mock task category service
-	taskServiceMock := &controller.MockTaskService{}
+	taskServiceMock := &mockControllers.MockTaskService{}
 
 	// Define the test cases
 	testCases := []struct {
@@ -768,7 +769,7 @@ func TestGetTaskCategoryOfTask(t *testing.T) {
 			name:           "Task Category Not Found",
 			taskID:         2,
 			mockTaskCat:    &models.TaskCategory{},
-			mockErr:        repository.ErrNoMatch,
+			mockErr:        repositories.ErrNoMatch,
 			expectedStatus: http.StatusNotFound,
 			expectedBody:   `{"status_text":"","message":"Resource not found"}`,
 		},
@@ -806,17 +807,17 @@ func TestGetTaskCategoryOfTask(t *testing.T) {
 				// Parse the task category ID as an integer
 				id, err := strconv.Atoi(taskID)
 				if err != nil {
-					render.Render(w, r, ErrorRenderer(err))
+					render.Render(w, r, handlers.ErrorRenderer(err))
 					return
 				}
 
 				// Call the task category service to get the task category with the specified ID
 				taskCategory, err := taskServiceMock.GetTaskCategoryOfTask(id, context.Background())
 				if err != nil {
-					if err == repository.ErrNoMatch {
-						render.Render(w, r, ErrNotFound)
+					if err == repositories.ErrNoMatch {
+						render.Render(w, r, handlers.ErrNotFound)
 					} else {
-						render.Render(w, r, ErrorRenderer(err))
+						render.Render(w, r, handlers.ErrorRenderer(err))
 					}
 					return
 				}

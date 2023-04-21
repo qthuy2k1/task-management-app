@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"encoding/json"
@@ -12,24 +12,25 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
+	"github.com/qthuy2k1/task-management-app/internal/utils"
 )
 
 type TaskHandler struct {
-	TaskController           *controller.TaskController
-	UserController           *controller.UserController
-	UserTaskDetailController *controller.UserTaskDetailController
+	TaskController           *controllers.TaskController
+	UserController           *controllers.UserController
+	UserTaskDetailController *controllers.UserTaskDetailController
 }
 
-func NewTaskHandler(database *repository.Database) *TaskHandler {
-	taskRepository := repository.NewTaskRepository(database)
-	taskController := controller.NewTaskController(taskRepository)
-	userRepository := repository.NewUserRepository(database)
-	userController := controller.NewUserController(userRepository)
-	userTaskDetailRepository := repository.NewUserTaskDetailRepository(database)
-	userTaskDetailController := controller.NewUserTaskDetailController(userTaskDetailRepository)
+func NewTaskHandler(database *repositories.Database) *TaskHandler {
+	taskRepository := repositories.NewTaskRepository(database)
+	taskController := controllers.NewTaskController(taskRepository)
+	userRepository := repositories.NewUserRepository(database)
+	userController := controllers.NewUserController(userRepository)
+	userTaskDetailRepository := repositories.NewUserTaskDetailRepository(database)
+	userTaskDetailController := controllers.NewUserTaskDetailController(userTaskDetailRepository)
 	return &TaskHandler{TaskController: taskController, UserController: userController, UserTaskDetailController: userTaskDetailController}
 }
 
@@ -111,13 +112,7 @@ func (h *TaskHandler) addTask(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
-	jsonBytes, err := json.Marshal(task)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, task)
 }
 
 func (h *TaskHandler) getAllTasks(w http.ResponseWriter, r *http.Request) {
@@ -150,14 +145,7 @@ func (h *TaskHandler) getAllTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonBytes, err := json.Marshal(tasks)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, tasks)
 }
 
 func (h *TaskHandler) getTask(w http.ResponseWriter, r *http.Request) {
@@ -168,20 +156,16 @@ func (h *TaskHandler) getTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task, err := h.TaskController.GetTaskByID(taskID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(task)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, task)
+
 }
 
 func (h *TaskHandler) deleteTask(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +186,7 @@ func (h *TaskHandler) deleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 	err = h.TaskController.DeleteTask(taskID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -212,12 +196,7 @@ func (h *TaskHandler) deleteTask(w http.ResponseWriter, r *http.Request) {
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 
 func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
@@ -254,20 +233,15 @@ func (h *TaskHandler) updateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task, err := h.TaskController.UpdateTask(taskID, taskData, ctx, isManager)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("no rows afftected")))
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(task)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, task)
 }
 
 func (h *TaskHandler) lockTask(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +262,7 @@ func (h *TaskHandler) lockTask(w http.ResponseWriter, r *http.Request) {
 	}
 	err = h.TaskController.LockTask(taskID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
@@ -298,12 +272,7 @@ func (h *TaskHandler) lockTask(w http.ResponseWriter, r *http.Request) {
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 
 func (h *TaskHandler) unLockTask(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +292,7 @@ func (h *TaskHandler) unLockTask(w http.ResponseWriter, r *http.Request) {
 	}
 	err = h.TaskController.UnLockTask(taskID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
@@ -333,12 +302,7 @@ func (h *TaskHandler) unLockTask(w http.ResponseWriter, r *http.Request) {
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 
 func (h *TaskHandler) importTaskCSV(w http.ResponseWriter, r *http.Request) {
@@ -372,13 +336,7 @@ func (h *TaskHandler) importTaskCSV(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	jsonBytes, err := json.Marshal(taskList)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, taskList)
 }
 
 func (h *TaskHandler) getTaskCategoryOfTask(w http.ResponseWriter, r *http.Request) {
@@ -389,20 +347,14 @@ func (h *TaskHandler) getTaskCategoryOfTask(w http.ResponseWriter, r *http.Reque
 	}
 	taskCategory, err := h.TaskController.GetTaskCategoryOfTask(taskID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(taskCategory)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, taskCategory)
 }
 
 func (h *TaskHandler) getTasksByName(w http.ResponseWriter, r *http.Request) {
@@ -413,18 +365,12 @@ func (h *TaskHandler) getTasksByName(w http.ResponseWriter, r *http.Request) {
 	}
 	tasks, err := h.TaskController.GetTasksByName(name, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(tasks)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, tasks)
 }

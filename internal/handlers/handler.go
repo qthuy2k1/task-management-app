@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/jwtauth/v5"
@@ -23,7 +23,7 @@ func init() {
 
 var ctx = context.Background()
 
-func NewHandler(db *repository.Database) http.Handler {
+func NewHandler(db *repositories.Database) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)

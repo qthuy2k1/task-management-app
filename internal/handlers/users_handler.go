@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"encoding/json"
@@ -13,21 +13,22 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
+	"github.com/qthuy2k1/task-management-app/internal/utils"
 )
 
 type UserHandler struct {
-	UserController           *controller.UserController
-	UserTaskDetailController *controller.UserTaskDetailController
+	UserController           *controllers.UserController
+	UserTaskDetailController *controllers.UserTaskDetailController
 }
 
-func NewUserHandler(database *repository.Database) *UserHandler {
-	userRepository := repository.NewUserRepository(database)
-	userController := controller.NewUserController(userRepository)
-	userTaskDetailRepository := repository.NewUserTaskDetailRepository(database)
-	userTaskDetailController := controller.NewUserTaskDetailController(userTaskDetailRepository)
+func NewUserHandler(database *repositories.Database) *UserHandler {
+	userRepository := repositories.NewUserRepository(database)
+	userController := controllers.NewUserController(userRepository)
+	userTaskDetailRepository := repositories.NewUserTaskDetailRepository(database)
+	userTaskDetailController := controllers.NewUserTaskDetailController(userTaskDetailRepository)
 	return &UserHandler{UserController: userController, UserTaskDetailController: userTaskDetailController}
 }
 
@@ -82,14 +83,7 @@ func (h *UserHandler) getAllUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonBytes, err := json.Marshal(users)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
-
+	utils.RenderJson(w, users)
 }
 
 func (h *UserHandler) getUser(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +95,7 @@ func (h *UserHandler) getUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.UserController.GetUserByID(userID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -109,13 +103,7 @@ func (h *UserHandler) getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonBytes, err := json.Marshal(user)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, user)
 }
 
 func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -142,12 +130,7 @@ func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 
 func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
@@ -172,20 +155,14 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.UserController.UpdateUser(userID, userData, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(user)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, user)
 }
 
 func (h *UserHandler) updateRole(w http.ResponseWriter, r *http.Request) {
@@ -210,20 +187,14 @@ func (h *UserHandler) updateRole(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.UserController.UpdateRole(userID, role, ctx, r, tokenAuth)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(user)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, user)
 }
 
 func (h *UserHandler) changeUserPassword(w http.ResponseWriter, r *http.Request) {
@@ -253,12 +224,7 @@ func (h *UserHandler) changeUserPassword(w http.ResponseWriter, r *http.Request)
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 
 func (h *UserHandler) signup(w http.ResponseWriter, r *http.Request) {
@@ -383,21 +349,14 @@ func (h *UserHandler) profileUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.UserController.GetUserByEmail(userEmail.(string), ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(user)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
-
+	utils.RenderJson(w, user)
 }
 
 // Validates that an email address is in a valid format
@@ -431,11 +390,5 @@ func (h *UserHandler) getUsersManager(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	jsonBytes, err := json.Marshal(users)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, users)
 }

@@ -1,15 +1,15 @@
-package handler
+package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
+	"github.com/qthuy2k1/task-management-app/internal/utils"
 )
 
 var userTaskDetailIDKey = "userTaskDetailID"
@@ -65,12 +65,7 @@ func (h *TaskHandler) addUserTaskDetail(w http.ResponseWriter, r *http.Request) 
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 func (h *TaskHandler) deleteUserFromTask(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
@@ -96,7 +91,7 @@ func (h *TaskHandler) deleteUserFromTask(w http.ResponseWriter, r *http.Request)
 
 	err = h.UserTaskDetailController.DeleteUserFromTask(userID, taskID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -106,12 +101,8 @@ func (h *TaskHandler) deleteUserFromTask(w http.ResponseWriter, r *http.Request)
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+
+	utils.RenderJson(w, s)
 }
 
 func (h *TaskHandler) getAllUserAsignnedToTask(w http.ResponseWriter, r *http.Request) {
@@ -125,13 +116,7 @@ func (h *TaskHandler) getAllUserAsignnedToTask(w http.ResponseWriter, r *http.Re
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
 	}
-	jsonBytes, err := json.Marshal(users)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, users)
 }
 
 func (h *UserHandler) getAllTaskAssignedToUser(w http.ResponseWriter, r *http.Request) {
@@ -145,11 +130,5 @@ func (h *UserHandler) getAllTaskAssignedToUser(w http.ResponseWriter, r *http.Re
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
 	}
-	jsonBytes, err := json.Marshal(tasks)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, tasks)
 }

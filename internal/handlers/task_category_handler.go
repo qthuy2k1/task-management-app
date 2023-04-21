@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"encoding/json"
@@ -12,21 +12,22 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
+	"github.com/qthuy2k1/task-management-app/internal/utils"
 )
 
 type TaskCategoryHandler struct {
-	TaskCategoryController *controller.TaskCategoryController
-	UserController         *controller.UserController
+	TaskCategoryController *controllers.TaskCategoryController
+	UserController         *controllers.UserController
 }
 
-func NewTaskCategoryHandler(database *repository.Database) *TaskCategoryHandler {
-	taskCategoryRepository := repository.NewTaskCategoryRepository(database)
-	taskCategoryController := controller.NewTaskCategoryController(taskCategoryRepository)
-	userRepository := repository.NewUserRepository(database)
-	userController := controller.NewUserController(userRepository)
+func NewTaskCategoryHandler(database *repositories.Database) *TaskCategoryHandler {
+	taskCategoryRepository := repositories.NewTaskCategoryRepository(database)
+	taskCategoryController := controllers.NewTaskCategoryController(taskCategoryRepository)
+	userRepository := repositories.NewUserRepository(database)
+	userController := controllers.NewUserController(userRepository)
 	return &TaskCategoryHandler{TaskCategoryController: taskCategoryController, UserController: userController}
 }
 
@@ -100,13 +101,7 @@ func (h *TaskCategoryHandler) addTaskCategory(w http.ResponseWriter, r *http.Req
 		render.Render(w, r, ErrorRenderer(err))
 		return
 	}
-	jsonBytes, err := json.Marshal(taskCategory)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, taskCategory)
 }
 
 func (h *TaskCategoryHandler) getAllTaskCategories(w http.ResponseWriter, r *http.Request) {
@@ -121,13 +116,7 @@ func (h *TaskCategoryHandler) getAllTaskCategories(w http.ResponseWriter, r *htt
 		render.Render(w, r, ServerErrorRenderer(err))
 		return
 	}
-	jsonBytes, err := json.Marshal(taskCategories)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, taskCategories)
 }
 
 func (h *TaskCategoryHandler) getTaskCategory(w http.ResponseWriter, r *http.Request) {
@@ -142,20 +131,14 @@ func (h *TaskCategoryHandler) getTaskCategory(w http.ResponseWriter, r *http.Req
 	}
 	taskCategory, err := h.TaskCategoryController.GetTaskCategoryByID(taskCategoryID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ErrorRenderer(err))
 		}
 		return
 	}
-	jsonBytes, err := json.Marshal(taskCategory)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, taskCategory)
 }
 
 func (h *TaskCategoryHandler) deleteTaskCategory(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +158,7 @@ func (h *TaskCategoryHandler) deleteTaskCategory(w http.ResponseWriter, r *http.
 	}
 	err = h.TaskCategoryController.DeleteTaskCategory(taskCategoryID, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -185,12 +168,7 @@ func (h *TaskCategoryHandler) deleteTaskCategory(w http.ResponseWriter, r *http.
 	s := success{
 		Status: "success",
 	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		render.Render(w, r, ServerErrorRenderer(err))
-		return
-	}
-	w.Write(jsonBytes)
+	utils.RenderJson(w, s)
 }
 func (h *TaskCategoryHandler) updateTaskCategory(w http.ResponseWriter, r *http.Request) {
 	taskCategoryID, err := h.validateTaskCategoryIDFromURLParam(r)
@@ -220,7 +198,7 @@ func (h *TaskCategoryHandler) updateTaskCategory(w http.ResponseWriter, r *http.
 	}
 	taskCategory, err := h.TaskCategoryController.UpdateTaskCategory(taskCategoryID, taskCategoryData, ctx)
 	if err != nil {
-		if err == repository.ErrNoMatch {
+		if err == repositories.ErrNoMatch {
 			render.Render(w, r, ErrNotFound)
 		} else {
 			render.Render(w, r, ServerErrorRenderer(err))
@@ -228,14 +206,7 @@ func (h *TaskCategoryHandler) updateTaskCategory(w http.ResponseWriter, r *http.
 		return
 	}
 
-	jsonBytes, err := json.Marshal(taskCategory)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
-
+	utils.RenderJson(w, taskCategory)
 }
 
 func (h *TaskCategoryHandler) importTaskCategoryCSV(w http.ResponseWriter, r *http.Request) {
@@ -263,11 +234,5 @@ func (h *TaskCategoryHandler) importTaskCategoryCSV(w http.ResponseWriter, r *ht
 			return
 		}
 	}
-	jsonBytes, err := json.Marshal(taskCategoryList)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonBytes)
+	utils.RenderJson(w, taskCategoryList)
 }

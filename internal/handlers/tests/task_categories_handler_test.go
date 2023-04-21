@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"bytes"
@@ -13,15 +13,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/handlers"
+	mockControllers "github.com/qthuy2k1/task-management-app/internal/mocks/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestGetAllTaskCategories(t *testing.T) {
 	// Create a new mock task category service
-	taskCategoryServiceMock := &controller.MockTaskCategoryService{}
+	taskCategoryServiceMock := &mockControllers.MockTaskCategoryService{}
 
 	r := chi.NewRouter()
 
@@ -91,7 +92,7 @@ func TestGetAllTaskCategories(t *testing.T) {
 }
 func TestGetTaskCategoryByID(t *testing.T) {
 	// Define the mock task category service
-	taskCategoryServiceMock := &controller.MockTaskCategoryService{}
+	taskCategoryServiceMock := &mockControllers.MockTaskCategoryService{}
 
 	// Define the test cases
 	testCases := []struct {
@@ -114,7 +115,7 @@ func TestGetTaskCategoryByID(t *testing.T) {
 			name:           "Task Category Not Found",
 			taskCategoryID: 2,
 			mockTaskCat:    &models.TaskCategory{},
-			mockErr:        repository.ErrNoMatch,
+			mockErr:        repositories.ErrNoMatch,
 			expectedStatus: http.StatusNotFound,
 			expectedBody:   `{"status_text":"","message":"Resource not found"}`,
 		},
@@ -152,17 +153,17 @@ func TestGetTaskCategoryByID(t *testing.T) {
 				// Parse the task category ID as an integer
 				id, err := strconv.Atoi(taskCategoryID)
 				if err != nil {
-					render.Render(w, r, ErrorRenderer(err))
+					render.Render(w, r, handlers.ErrorRenderer(err))
 					return
 				}
 
 				// Call the task category service to get the task category with the specified ID
 				taskCategory, err := taskCategoryServiceMock.GetTaskCategoryByID(id, context.Background())
 				if err != nil {
-					if err == repository.ErrNoMatch {
-						render.Render(w, r, ErrNotFound)
+					if err == repositories.ErrNoMatch {
+						render.Render(w, r, handlers.ErrNotFound)
 					} else {
-						render.Render(w, r, ErrorRenderer(err))
+						render.Render(w, r, handlers.ErrorRenderer(err))
 					}
 					return
 				}
@@ -225,7 +226,7 @@ func TestAddTaskCategory(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a new mock task service
-			taskCategoryServiceMock := &controller.MockTaskCategoryService{}
+			taskCategoryServiceMock := &mockControllers.MockTaskCategoryService{}
 
 			// Create a new test router
 			router := chi.NewRouter()
@@ -242,18 +243,18 @@ func TestAddTaskCategory(t *testing.T) {
 
 				tokenStr := strings.Split(r.Header.Get("Authorization"), " ")[1]
 				if tokenStr == "" {
-					render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+					render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 					return
 				}
 				token, err := tokenAuth.Decode(tokenStr)
 				if err != nil {
 					fmt.Println(err)
-					render.Render(w, r, ErrorRenderer(err))
+					render.Render(w, r, handlers.ErrorRenderer(err))
 					return
 				}
 				if token == nil {
 					fmt.Println(err)
-					render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+					render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 					return
 				}
 
@@ -264,7 +265,7 @@ func TestAddTaskCategory(t *testing.T) {
 					return
 				}
 				if err != nil {
-					render.Render(w, r, ErrorRenderer(err))
+					render.Render(w, r, handlers.ErrorRenderer(err))
 					return
 				}
 
@@ -280,6 +281,7 @@ func TestAddTaskCategory(t *testing.T) {
 
 			// Set up the taskServiceMock to return nil when AddTaskCategory is called with the mock task category
 			taskCategoryServiceMock.On("AddTaskCategory", tc.taskCategory, context.Background()).Return(nil)
+			fmt.Println("=======================================================")
 			_, tokenStr, _ := tokenAuth.Encode(map[string]interface{}{
 				"email":    "test@example.com",
 				"password": "password",
@@ -316,7 +318,7 @@ func TestAddTaskCategory(t *testing.T) {
 }
 func TestDeleteTaskCategory(t *testing.T) {
 	// Create a new mock task category service
-	taskCategoryServiceMock := &controller.MockTaskCategoryService{}
+	taskCategoryServiceMock := &mockControllers.MockTaskCategoryService{}
 
 	// Create a new test router
 	router := chi.NewRouter()
@@ -326,34 +328,34 @@ func TestDeleteTaskCategory(t *testing.T) {
 		// Get the task category ID from the URL parameters
 		taskCategoryId, err := strconv.Atoi(chi.URLParam(r, "taskCategoryId"))
 		if err != nil {
-			render.Render(w, r, ErrBadRequest)
+			render.Render(w, r, handlers.ErrBadRequest)
 			return
 		}
 
 		tokenStr := strings.Split(r.Header.Get("Authorization"), " ")[1]
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		if token == nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 
 		// Call the task category service to delete the task category
 		err = taskCategoryServiceMock.DeleteTaskCategory(taskCategoryId, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				render.Render(w, r, ErrNotFound)
+			if err == repositories.ErrNoMatch {
+				render.Render(w, r, handlers.ErrNotFound)
 			} else {
-				render.Render(w, r, ServerErrorRenderer(err))
+				render.Render(w, r, handlers.ServerErrorRenderer(err))
 			}
 			return
 		}
@@ -391,7 +393,7 @@ func TestDeleteTaskCategory(t *testing.T) {
 
 func TestUpdateTaskCategoryHandler(t *testing.T) {
 	// Create a new mock task category service
-	taskCategoryServiceMock := &controller.MockTaskCategoryService{}
+	taskCategoryServiceMock := &mockControllers.MockTaskCategoryService{}
 
 	// Create a new router using Go chi
 	r := chi.NewRouter()
@@ -418,25 +420,25 @@ func TestUpdateTaskCategoryHandler(t *testing.T) {
 		}
 		tokenStr := r.Context().Value("token").(string)
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
 			fmt.Println(err)
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		if token == nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		taskCategory, err := taskCategoryServiceMock.UpdateTaskCategory(taskCategoryID, taskCategoryData, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				render.Render(w, r, ErrNotFound)
+			if err == repositories.ErrNoMatch {
+				render.Render(w, r, handlers.ErrNotFound)
 			} else {
-				render.Render(w, r, ServerErrorRenderer(err))
+				render.Render(w, r, handlers.ServerErrorRenderer(err))
 			}
 			return
 		}

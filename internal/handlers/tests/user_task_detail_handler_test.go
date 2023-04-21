@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"context"
@@ -13,16 +13,24 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/handlers"
+	mockController "github.com/qthuy2k1/task-management-app/internal/mocks/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
 	"github.com/volatiletech/null/v8"
 )
 
+var tokenAuth *jwtauth.JWTAuth
+
+func init() {
+	tokenAuth = jwtauth.New("HS256", []byte(handlers.Secret), nil)
+}
+
 func TestAddUserTaskDetailHandler(t *testing.T) {
 	// Create a new instance of the mock user task detail service
-	mockUserTaskDetailService := &controller.MockUserTaskDetailService{}
+	mockUserTaskDetailService := &mockController.MockUserTaskDetailService{}
 
 	// Create a new router
 	r := chi.NewRouter()
@@ -31,36 +39,36 @@ func TestAddUserTaskDetailHandler(t *testing.T) {
 	r.Post("/tasks/{taskID}/add-user", func(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseForm()
 		if err != nil {
-			render.Render(w, r, ServerErrorRenderer(fmt.Errorf("failed to parse form data")))
+			render.Render(w, r, handlers.ServerErrorRenderer(fmt.Errorf("failed to parse form data")))
 		}
 		userID, err := strconv.Atoi(r.PostForm.Get("id"))
 		if err != nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid user id")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("invalid user id")))
 			return
 		}
 		taskID, err := strconv.Atoi(chi.URLParam(r, "taskID"))
 		if err != nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid task id")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("invalid task id")))
 			return
 		}
 
 		tokenStr := r.Context().Value("token").(string)
 		if tokenStr == "" {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		token, err := tokenAuth.Decode(tokenStr)
 		if err != nil {
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 		if token == nil {
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+			render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("no token found")))
 			return
 		}
 		err = mockUserTaskDetailService.AddUserToTask(userID, taskID, context.Background())
 		if err != nil {
-			render.Render(w, r, ErrorRenderer(err))
+			render.Render(w, r, handlers.ErrorRenderer(err))
 			return
 		}
 	})
@@ -135,7 +143,7 @@ func TestAddUserTaskDetailHandler(t *testing.T) {
 }
 func TestDeleteUserTaskDetailHandler(t *testing.T) {
 	// Create a new instance of the mock user task detail service
-	mockUserTaskDetailService := &controller.MockUserTaskDetailService{}
+	mockUserTaskDetailService := &mockController.MockUserTaskDetailService{}
 
 	// Create a new router
 	r := chi.NewRouter()
@@ -178,7 +186,7 @@ func TestDeleteUserTaskDetailHandler(t *testing.T) {
 			return
 		}
 		if err != nil {
-			if err == repository.ErrNoMatch {
+			if err == repositories.ErrNoMatch {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			} else {
@@ -260,7 +268,7 @@ func TestDeleteUserTaskDetailHandler(t *testing.T) {
 }
 func TestGetAllUserAssignedToTaskHandler(t *testing.T) {
 	// Create a new instance of the mock user task detail service
-	mockUserTaskDetailService := &controller.MockUserTaskDetailService{}
+	mockUserTaskDetailService := &mockController.MockUserTaskDetailService{}
 
 	// Create a new router
 	r := chi.NewRouter()
@@ -353,7 +361,7 @@ func TestGetAllUserAssignedToTaskHandler(t *testing.T) {
 }
 func TestGetAllTaskAssignedToUser(t *testing.T) {
 	// Create a new instance of the mock user task detail service
-	mockUserTaskDetailService := &controller.MockUserTaskDetailService{}
+	mockUserTaskDetailService := &mockController.MockUserTaskDetailService{}
 
 	// Create a new router
 	r := chi.NewRouter()

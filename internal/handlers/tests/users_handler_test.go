@@ -1,4 +1,4 @@
-package handler
+package handlers
 
 import (
 	"bytes"
@@ -18,15 +18,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/qthuy2k1/task-management-app/internal/controller"
+	"github.com/qthuy2k1/task-management-app/internal/handlers"
+	mockControllers "github.com/qthuy2k1/task-management-app/internal/mocks/controllers"
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
-	"github.com/qthuy2k1/task-management-app/internal/repository"
+	"github.com/qthuy2k1/task-management-app/internal/repositories"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetUserByIDHandler(t *testing.T) {
 	// Create a mock user service
-	mockUserService := &controller.MockUserService{}
+	mockUserService := &mockControllers.MockUserService{}
 
 	// Set up the test cases
 	testCases := []struct {
@@ -48,7 +49,7 @@ func TestGetUserByIDHandler(t *testing.T) {
 		{
 			userID:      2,
 			expected:    &models.User{},
-			expectedErr: repository.ErrNoMatch,
+			expectedErr: repositories.ErrNoMatch,
 		},
 		{
 			userID: 24,
@@ -75,12 +76,12 @@ func TestGetUserByIDHandler(t *testing.T) {
 		{
 			userID:      200,
 			expected:    &models.User{},
-			expectedErr: repository.ErrNoMatch,
+			expectedErr: repositories.ErrNoMatch,
 		},
 		{
 			userID:      -1,
 			expected:    &models.User{},
-			expectedErr: ErrNotFound.Err,
+			expectedErr: handlers.ErrNotFound.Err,
 		},
 	}
 
@@ -102,8 +103,8 @@ func TestGetUserByIDHandler(t *testing.T) {
 		}
 		user, err := mockUserService.GetUserByID(userID, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				http.Error(w, ErrNotFound.Message, http.StatusNotFound)
+			if err == repositories.ErrNoMatch {
+				http.Error(w, handlers.ErrNotFound.Message, http.StatusNotFound)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
@@ -131,7 +132,7 @@ func TestGetUserByIDHandler(t *testing.T) {
 			expectedBody, err := json.Marshal(tc.expected)
 			assert.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(string(expectedBody)), strings.TrimSpace(w.Body.String()))
-		} else if tc.expectedErr == repository.ErrNoMatch {
+		} else if tc.expectedErr == repositories.ErrNoMatch {
 			assert.Equal(t, http.StatusNotFound, w.Code)
 		} else {
 			assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -161,7 +162,7 @@ func TestGetAllUsers(t *testing.T) {
 		},
 	}
 
-	mockUserService := &controller.MockUserService{}
+	mockUserService := &mockControllers.MockUserService{}
 
 	// Define the expected return values for the mock GetAllUsers function
 	mockUserService.On("GetAllUsers", context.Background()).Return(mockUserList, nil)
@@ -200,7 +201,7 @@ func TestGetAllUsers(t *testing.T) {
 
 func TestUpdateUser(t *testing.T) {
 	// Create a mock user service
-	mockUserService := &controller.MockUserService{}
+	mockUserService := &mockControllers.MockUserService{}
 
 	// Create a new router
 	r := chi.NewRouter()
@@ -225,8 +226,8 @@ func TestUpdateUser(t *testing.T) {
 		// Call the UpdateUser function on the mock user service
 		updatedUser, err := mockUserService.UpdateUser(userID, userData, context.Background())
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				http.Error(w, err.Error(), ErrNotFound.StatusCode)
+			if err == repositories.ErrNoMatch {
+				http.Error(w, err.Error(), handlers.ErrNotFound.StatusCode)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -264,7 +265,7 @@ func TestUpdateUser(t *testing.T) {
 				Email: "bob@example.com",
 			},
 			expectedUser:  &models.User{},
-			expectedError: repository.ErrNoMatch,
+			expectedError: repositories.ErrNoMatch,
 		},
 	}
 
@@ -297,7 +298,7 @@ func TestUpdateUser(t *testing.T) {
 				t.Fatal(err)
 			}
 			assert.Equal(t, tc.expectedUser, updatedUser)
-		} else if tc.expectedError == repository.ErrNoMatch {
+		} else if tc.expectedError == repositories.ErrNoMatch {
 			assert.Equal(t, http.StatusNotFound, w.Code)
 		} else {
 			assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -311,7 +312,7 @@ func TestUpdateUser(t *testing.T) {
 func TestUpdateRoleUser(t *testing.T) {
 	invalidRoleErr := fmt.Errorf("invalid role")
 	// Set up the mock user service
-	mockUserService := &controller.MockUserService{}
+	mockUserService := &mockControllers.MockUserService{}
 
 	// Set up the expectations for each test case
 	mockUserService.On("UpdateRole", 1, "manager", context.Background()).Return(&models.User{
@@ -326,7 +327,7 @@ func TestUpdateRoleUser(t *testing.T) {
 		Email: "john@example.com",
 		Role:  "user",
 	}, nil)
-	mockUserService.On("UpdateRole", 3, "adad", context.Background()).Return(&models.User{}, repository.ErrNoMatch)
+	mockUserService.On("UpdateRole", 3, "adad", context.Background()).Return(&models.User{}, repositories.ErrNoMatch)
 	mockUserService.On("UpdateRole", 4, "", context.Background()).Return(&models.User{}, invalidRoleErr)
 
 	// Set up the test cases
@@ -362,7 +363,7 @@ func TestUpdateRoleUser(t *testing.T) {
 			userID:        3,
 			role:          "adad",
 			expectedUser:  &models.User{},
-			expectedError: repository.ErrNoMatch,
+			expectedError: repositories.ErrNoMatch,
 		},
 		{
 			userID:        4,
@@ -391,8 +392,8 @@ func TestUpdateRoleUser(t *testing.T) {
 			return
 		}
 		if err != nil {
-			if err == repository.ErrNoMatch {
-				http.Error(w, err.Error(), ErrNotFound.StatusCode)
+			if err == repositories.ErrNoMatch {
+				http.Error(w, err.Error(), handlers.ErrNotFound.StatusCode)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -424,7 +425,7 @@ func TestUpdateRoleUser(t *testing.T) {
 			}
 			assert.Equal(t, tc.expectedUser, updatedUser)
 			assert.Equal(t, tc.role, tc.expectedUser.Role)
-		} else if errors.Is(tc.expectedError, repository.ErrNoMatch) {
+		} else if errors.Is(tc.expectedError, repositories.ErrNoMatch) {
 			assert.Equal(t, http.StatusNotFound, w.Code)
 		} else if errors.Is(tc.expectedError, invalidRoleErr) {
 			assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -475,7 +476,7 @@ func TestSignUpHandler(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a new mock user service
-			mockUserService := &controller.MockUserService{}
+			mockUserService := &mockControllers.MockUserService{}
 
 			// Set up the mock user service to return nil error for AddUser
 			mockUserService.On("AddUser", tc.expectedUser, context.Background()).Return(nil)
@@ -486,7 +487,7 @@ func TestSignUpHandler(t *testing.T) {
 				// Call the SignUp handler with the mock user service
 				err := r.ParseForm()
 				if err != nil {
-					render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to parse form data")))
+					render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("failed to parse form data")))
 					return
 				}
 
@@ -497,7 +498,7 @@ func TestSignUpHandler(t *testing.T) {
 				user.Role = "user"
 
 				if user.Email == "" || user.Name == "" || user.Password == "" {
-					render.Render(w, r, ErrorRenderer(fmt.Errorf("missing name, email or password")))
+					render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("missing name, email or password")))
 					return
 				}
 
@@ -517,12 +518,12 @@ func TestSignUpHandler(t *testing.T) {
 				// Add user to database
 				err = mockUserService.AddUser(&user, context.Background())
 				if err != nil {
-					render.Render(w, r, ErrorRenderer(fmt.Errorf("failed to add user to database")))
+					render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("failed to add user to database")))
 					return
 				}
 
 				// Generate JWT token for user
-				token := MakeToken(user.Email, user.Password)
+				token := handlers.MakeToken(user.Email, user.Password)
 
 				// Set JWT token as cookie
 				http.SetCookie(w, &http.Cookie{
@@ -562,7 +563,7 @@ func TestSignUpHandler(t *testing.T) {
 
 func TestLoginHandler(t *testing.T) {
 	// Create a new mock user service instance for each test case
-	mockUserService := &controller.MockUserService{}
+	mockUserService := &mockControllers.MockUserService{}
 	// Create a new router with the login handler
 	router := chi.NewRouter()
 	router.Post("/login",
@@ -582,18 +583,18 @@ func TestLoginHandler(t *testing.T) {
 			// Use the MatchString method to check if the email address matches the regular expression
 			validEmail := emailRegex.MatchString(email)
 			if email == "" || !validEmail {
-				render.Render(w, r, ErrorRenderer(fmt.Errorf("your email is not valid, please provide a valid email")))
+				render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("your email is not valid, please provide a valid email")))
 				return
 			}
 
 			// Validate password
 			// The password must contain at least 6 characters
 			if password == "" || len(password) < 6 {
-				render.Render(w, r, ErrorRenderer(fmt.Errorf("your password is not valid, please provide a valid password that contains at least 6 characters")))
+				render.Render(w, r, handlers.ErrorRenderer(fmt.Errorf("your password is not valid, please provide a valid password that contains at least 6 characters")))
 				return
 			}
 
-			token := MakeToken(email, password)
+			token := handlers.MakeToken(email, password)
 
 			// Set the JWT token as a cookie in the response
 			http.SetCookie(w, &http.Cookie{
@@ -749,7 +750,7 @@ func TestGetUsersManager(t *testing.T) {
 		},
 	}
 
-	mockUserService := &controller.MockUserService{}
+	mockUserService := &mockControllers.MockUserService{}
 
 	// Define the expected return values for the mock GetAllUsers function
 	mockUserService.On("GetUsersManager", context.Background()).Return(mockUserList, nil)
