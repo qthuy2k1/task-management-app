@@ -39,6 +39,7 @@ func (h *TaskCategoryHandler) taskCategories(router chi.Router) {
 		router.Get("/", h.getTaskCategory)
 		router.Put("/", h.updateTaskCategory)
 		router.Delete("/", h.deleteTaskCategory)
+		router.Get("/get-tasks", h.getTasksByCategory)
 	})
 }
 func (h *TaskCategoryHandler) validateTaskCategoryIDFromURLParam(r *http.Request) (int, error) {
@@ -235,4 +236,26 @@ func (h *TaskCategoryHandler) importTaskCategoryCSV(w http.ResponseWriter, r *ht
 		}
 	}
 	utils.RenderJson(w, taskCategoryList)
+}
+
+func (h *TaskCategoryHandler) getTasksByCategory(w http.ResponseWriter, r *http.Request) {
+	taskCategoryID, err := h.validateTaskCategoryIDFromURLParam(r)
+	if err != nil {
+		render.Render(w, r, ErrorRenderer(err))
+	}
+	token := GetToken(r, tokenAuth)
+	if token == nil {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("no token found")))
+		return
+	}
+	tasks, err := h.TaskCategoryController.GetTasksByCategory(taskCategoryID, ctx)
+	if err != nil {
+		if err == repositories.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ErrorRenderer(err))
+		}
+		return
+	}
+	utils.RenderJson(w, tasks)
 }

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	models "github.com/qthuy2k1/task-management-app/internal/models/gen"
@@ -28,15 +29,77 @@ const (
 	Lock       TaskStatus = "Lock"
 )
 
-func (re *TaskRepository) GetAllTasks(ctx context.Context, pageNumber int, pageSize int, sortField string, sortOrder string) (models.TaskSlice, error) {
-	fmt.Println(sortField)
-	queryMods := []QueryMod{
-		OrderBy(fmt.Sprintf(sortField + " " + sortOrder)),
-		Offset((pageNumber - 1) * pageSize),
-		Limit(pageSize),
+func (re *TaskRepository) GetAllTasks(ctx context.Context, filterValues map[string]interface{}) (models.TaskSlice, error) {
+	var (
+		sortField string
+		sortOrder string
+	)
+	query := []QueryMod{Where("1=1")}
+	for field, value := range filterValues {
+		switch field {
+		case "id":
+			valueConv, ok := value.(int)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} id to int")
+			}
+			query = append(query, Where("id = ?", valueConv))
+		case "name":
+			valueConv, ok := value.(string)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} name to string")
+			}
+			query = append(query, Where("name LIKE ?", "%"+valueConv+"%"))
+		case "description":
+			valueConv, ok := value.(string)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} description to string")
+			}
+			query = append(query, Where("description LIKE ?", "%"+valueConv+"%"))
+		case "status":
+			valueConv, ok := value.(string)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} status to string")
+			}
+			query = append(query, Where("status LIKE ?", "%"+valueConv+"%"))
+		case "author_id":
+			valueConv, ok := value.(int)
+			if !ok {
+				return nil, errors.New("cannot convert string author_id to int")
+			}
+			query = append(query, Where("author_id = ?", valueConv))
+		case "task_category_id":
+			valueConv, ok := value.(int)
+			if !ok {
+				return nil, errors.New("cannot convert string task_category_id to int")
+			}
+			query = append(query, Where("task_category_id = ?", valueConv))
+		case "field":
+			sortField, ok := value.(string)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} sortfield to string")
+			}
+		case "order":
+			sortOrder, ok := value.(string)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} sortorder to string")
+			}
+			// query = append(query, OrderBy(fmt.Sprintf(sortField+" "+sortOrder)))
+		case "page":
+			pageNumber, ok := value.(int)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} page to int")
+			}
+			query = append(query, Offset(pageNumber))
+		case "size":
+			pageSize, ok := value.(int)
+			if !ok {
+				return nil, errors.New("cannot convert interface{} size to int")
+			}
+			query = append(query, Limit(pageSize))
+		}
 	}
-	// rows, err := models.Tasks(OrderBy("? ?", sortField, sortOrder), Limit(pageSize), Offset((pageNumber-1)*pageSize)).All(ctx, re.Database.Conn)
-	rows, err := models.Tasks(queryMods...).All(ctx, re.Database.Conn)
+	query = append(query, OrderBy(fmt.Sprintf(sortField+" "+sortOrder)))
+	rows, err := models.Tasks(query...).All(ctx, re.Database.Conn)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrNoMatch
@@ -52,10 +115,6 @@ func (re *TaskRepository) GetAllTasks(ctx context.Context, pageNumber int, pageS
 		}
 		tasks = append(tasks, x)
 	}
-
-	// if err := rows.Err(); err != nil {
-	//     return nil, err
-	// }
 
 	return tasks, nil
 }
@@ -164,3 +223,32 @@ func (re *TaskRepository) GetTasksByName(name string, ctx context.Context) (mode
 	}
 	return tasks, nil
 }
+
+// Total number of tasks
+func (re *TaskRepository) GetTaskCount(ctx context.Context) (int64, error) {
+	count, err := models.Tasks().Count(ctx, re.Database.Conn)
+	if err != nil {
+		return -1, err
+	}
+	return count, nil
+}
+
+// Total number of filtered status tasks
+func (re *TaskRepository) CountFilteredStatusTask(status string, ctx context.Context) (int64, error) {
+	count, err := models.Tasks(Where("status = ?", status)).Count(ctx, re.Database.Conn)
+	if err != nil {
+		return -1, err
+	}
+	return count, nil
+}
+
+// func (re *TaskRepository) FilterTasks(, ctx context.Context) (models.TaskSlice, error) {
+// 	// Build a query using SQLBoiler's query builder.
+
+// 	// Execute the query and return the results.
+// 	tasks, err := models.Tasks(query...).All(ctx, re.Database.Conn)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return tasks, nil
+// }

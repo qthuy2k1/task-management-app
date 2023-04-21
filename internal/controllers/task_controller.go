@@ -23,8 +23,8 @@ func NewTaskController(taskRepository *repositories.TaskRepository) *TaskControl
 	return &TaskController{TaskRepository: taskRepository}
 }
 
-func (c *TaskController) GetAllTasks(ctx context.Context, pageNumber int, pageSize int, sortField string, sortOrder string) (models.TaskSlice, error) {
-	tasks, err := c.TaskRepository.GetAllTasks(ctx, pageNumber, pageSize, sortField, sortOrder)
+func (c *TaskController) GetAllTasks(ctx context.Context, filterValues map[string]interface{}) (models.TaskSlice, error) {
+	tasks, err := c.TaskRepository.GetAllTasks(ctx, filterValues)
 	if err != nil {
 		return tasks, err
 	}
@@ -209,3 +209,27 @@ func (c *TaskController) GetTasksByName(name string, ctx context.Context) (model
 	}
 	return tasks, nil
 }
+
+func (c *TaskController) GetTaskCount(ctx context.Context) (int64, error) {
+	count, err := c.TaskRepository.GetTaskCount(ctx)
+	if err != nil {
+		return -1, err
+	}
+	return count, nil
+}
+
+func (c *TaskController) CountFilteredStatusTask(status string, ctx context.Context) (int64, error) {
+	count, err := c.TaskRepository.CountFilteredStatusTask(status, ctx)
+	if err != nil {
+		return -1, err
+	}
+	return count, nil
+}
+
+// func (c *TaskController) FilterTasks(filterValues map[string]string, ctx context.Context) (models.TaskSlice, error) {
+// 	tasks, err := c.TaskRepository.FilterTasks(filterValues, ctx)
+// 	if err != nil {
+// 		return tasks, err
+// 	}
+// 	return tasks, nil
+// }

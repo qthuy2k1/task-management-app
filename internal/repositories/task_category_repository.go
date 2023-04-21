@@ -66,3 +66,15 @@ func (re *TaskCategoryRepository) UpdateTaskCategory(taskCategory *models.TaskCa
 	}
 	return taskCategory, nil
 }
+
+// Get all tasks that have a given category by URL parameter
+func (re *TaskCategoryRepository) GetTasksByCategory(taskCategoryID int, ctx context.Context) (models.TaskSlice, error) {
+	tasks, err := models.Tasks(InnerJoin("task_categories c on c.id = tasks.task_category_id"), Where("tasks.task_category_id = ?", taskCategoryID)).All(ctx, re.Database.Conn)
+	if err != nil {
+		return tasks, err
+	}
+	if len(tasks) == 0 {
+		return tasks, ErrNoMatch
+	}
+	return tasks, nil
+}

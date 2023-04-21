@@ -39,6 +39,8 @@ func (h *TaskHandler) tasks(router chi.Router) {
 	router.Post("/", h.addTask)
 	router.Post("/csv", h.importTaskCSV)
 	router.Get("/filter-name", h.getTasksByName)
+	// router.Get("/filter", h.filterTasks)
+	// router.Get("/count-filtered-status", h.countFilteredStatusTask)
 	router.Route("/{taskID}", func(router chi.Router) {
 		router.Get("/", h.getTask)
 		router.Put("/", h.updateTask)
@@ -116,30 +118,44 @@ func (h *TaskHandler) addTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) getAllTasks(w http.ResponseWriter, r *http.Request) {
-	pageNumber := 1
-	pageSize := 2
-	sortField := "id"
-	sortOrder := "asc"
-
-	// Retrieve the "page" query parameter from the request, if present
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		pageNumber, _ = strconv.Atoi(pageStr)
+	query := r.URL.Query()
+	queryParams := make(map[string]any)
+	// set default for query
+	queryParams["page"] = 1
+	queryParams["size"] = 2
+	queryParams["field"] = "id"
+	queryParams["order"] = "asc"
+	for key, values := range query {
+		if len(values) > 0 {
+			switch key {
+			case "page":
+				pageNumber, err := strconv.Atoi(values[0])
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				queryParams[key] = pageNumber
+			case "size":
+				pageSize, err := strconv.Atoi(values[0])
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				queryParams[key] = pageSize
+			case "author_id":
+				authorID, err := strconv.Atoi(values[0])
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				queryParams[key] = authorID
+			default:
+				queryParams[key] = values[0]
+			}
+		}
 	}
 
-	// Retrieve the "size" query parameter from the request, if present
-	if sizeStr := r.URL.Query().Get("size"); sizeStr != "" {
-		pageSize, _ = strconv.Atoi(sizeStr)
-	}
-
-	// Retrieve the "sort" query parameter from the request, if present
-	if sortFieldStr := r.URL.Query().Get("sortfield"); sortFieldStr != "" {
-		sortField = sortFieldStr
-	}
-	if sortOrderStr := r.URL.Query().Get("sortorder"); sortOrderStr != "" {
-		sortOrder = sortOrderStr
-	}
-
-	tasks, err := h.TaskController.GetAllTasks(ctx, pageNumber, pageSize, sortField, sortOrder)
+	tasks, err := h.TaskController.GetAllTasks(ctx, queryParams)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -360,7 +376,7 @@ func (h *TaskHandler) getTaskCategoryOfTask(w http.ResponseWriter, r *http.Reque
 func (h *TaskHandler) getTasksByName(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
-		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid role")))
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid name")))
 		return
 	}
 	tasks, err := h.TaskController.GetTasksByName(name, ctx)
@@ -374,3 +390,45 @@ func (h *TaskHandler) getTasksByName(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.RenderJson(w, tasks)
 }
+
+func (h *TaskHandler) countFilteredStatusTask(w http.ResponseWriter, r *http.Request) {
+	status := r.URL.Query().Get("status")
+	if status == "" {
+		render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid status")))
+		return
+	}
+	count, err := h.TaskController.CountFilteredStatusTask(status, ctx)
+	if err != nil {
+		if err == repositories.ErrNoMatch {
+			render.Render(w, r, ErrNotFound)
+		} else {
+			render.Render(w, r, ErrorRenderer(err))
+		}
+		return
+	}
+	type CountResponse struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	response := CountResponse{
+		Status: status,
+		Count:  count,
+	}
+	utils.RenderJson(w, response)
+}
+
+// func (h *TaskHandler) filterTasks(w http.ResponseWriter, r *http.Request) {
+// 	query := r.URL.Query()
+// 	queryParams := make(map[string]string)
+// 	for key, values := range query {
+// 		if len(values) > 0 {
+// 			queryParams[key] = values[0]
+// 		}
+// 	}
+// 	tasks, err := h.TaskController.FilterTasks(queryParams, ctx)
+// 	if err != nil {
+// 		render.Render(w, r, ErrorRenderer(err))
+// 		return
+// 	}
+// 	utils.RenderJson(w, tasks)
+// }

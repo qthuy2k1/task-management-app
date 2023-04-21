@@ -105,3 +105,11 @@ func (re *TaskCategoryController) ImportTaskCategoryDataFromCSV(path string) ([]
 
 	return taskCategoryList, nil
 }
+
+func (c *TaskCategoryController) GetTasksByCategory(taskCategoryID int, ctx context.Context) (models.TaskSlice, error) {
+	tasks, err := c.TaskCategoryRepository.GetTasksByCategory(taskCategoryID, ctx)
+	if err != nil {
+		return tasks, err
+	}
+	return tasks, nil
+}
